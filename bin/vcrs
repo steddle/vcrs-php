@@ -1,0 +1,188 @@
+#!/usr/bin/env php
+<?php
+
+use Steddle\Vcrs\Annex;
+use Steddle\Vcrs\Check;
+use Steddle\Vcrs\InvalidRegister;
+use Steddle\Vcrs\Level;
+use Steddle\Vcrs\Register;
+use Steddle\Vcrs\Report;
+use Steddle\Vcrs\Statement;
+use Steddle\Vcrs\Vcrs;
+
+foreach ([__DIR__.'/../vendor/autoload.php', __DIR__.'/../../../autoload.php', __DIR__.'/../../../../vendor/autoload.php'] as $autoload) {
+    if (is_file($autoload)) {
+        require $autoload;
+
+        break;
+    }
+}
+
+const USAGE = 'VCRS '.Vcrs::VERSION.": check a claimant register against the Verified Claimant Register Standard.\n".<<<'TXT'
+
+  vcrs check <register.json> [--records=<records.csv>] [--json]
+      Grade every record, measure coverage, compute the snapshot root, and say up to which level the export's conditions hold.
+
+  vcrs statement <register.json> [--records=<records.csv>] [--level=registered|identified|verified]
+                 [--auditor-firm=<name> --auditor-standard=<standard> --auditor-date=<YYYY-MM-DD>] [--issued-on=<YYYY-MM-DD>]
+      Draft the conformance statement as JSON. Without the auditor it is a draft.
+
+  vcrs manifest <register.json> [--records=<records.csv>]
+      Print the snapshot manifest (one line per record: id and digest) and its root, to anchor in time.
+
+The annex is the one the register names.
+
+TXT;
+
+[$command, $path, $options] = arguments(array_slice($argv, 1));
+
+if ($command === null || $path === null || ! in_array($command, ['check', 'statement', 'manifest'], true)) {
+    fwrite(STDERR, USAGE);
+    exit(2);
+}
+
+try {
+    $register = Register::read($path, $options['records'] ?? null);
+    $report = Check::run($register, Annex::load($register->data['annex']));
+
+    exit(match ($command) {
+        'check' => check($report, isset($options['json'])),
+        'statement' => statement($report, $options),
+        'manifest' => manifest($report),
+    });
+} catch (InvalidRegister $invalid) {
+    fwrite(STDERR, "The register is not valid:\n  ".implode("\n  ", $invalid->errors)."\n");
+    exit(1);
+} catch (Throwable $error) {
+    fwrite(STDERR, $error->getMessage()."\n");
+    exit(1);
+}
+
+function check(Report $report, bool $json): int
+{
+    if ($json) {
+        echo json_encode($report->toArray(), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)."\n";
+
+        return $report->level() === null ? 1 : 0;
+    }
+
+    $data = $report->data;
+    $counts = $report->counts();
+    $denominator = $data['denominator'];
+
+    echo "{$data['representative']['name']}: {$data['action']['title']}\n";
+    echo 'VCRS '.Vcrs::VERSION.', Annex '.strtoupper($report->annex->code).", reference date {$data['reference_date']}\n\n";
+    echo 'Denominator: '.number($denominator['low']).($denominator['low'] === $denominator['high'] ? '' : ' to '.number($denominator['high']))." ({$denominator['source']}, {$denominator['as_of']})\n\n";
+
+    if (isset($data['claims'])) {
+        $claims = $data['claims'];
+        echo "Represented claims: {$claims['currency']} ".number($claims['low']).($claims['low'] === $claims['high'] ? '' : ' to '.number($claims['high']))." ({$claims['method']})\n\n";
+    }
+
+    printf("  %-14s %10s   %s\n", 'Grade', 'Records', 'Coverage');
+
+    foreach ($report->coverage() as $grade => $share) {
+        printf("  %-14s %10s   %s\n", "{$grade} or better", number($share['records']), percent($share['low']).($share['low'] === $share['high'] ? '' : ' to '.percent($share['high'])));
+    }
+
+    printf("  %-14s %10s\n", 'D', number($counts['D']));
+    printf("  %-14s %10s\n\n", 'Not active', number($counts['inactive']));
+
+    if ($report->reasons() !== []) {
+        echo "Why records hold their grade:\n";
+
+        foreach ($report->reasons() as $grade => $reasons) {
+            foreach ($reasons as $reason => $count) {
+                printf("  %s  %-24s %s\n", $grade, $reason, number($count));
+            }
+        }
+
+        echo "\n";
+    }
+
+    echo "Snapshot root: {$report->root}\n";
+
+    $level = $report->level();
+    echo 'Export conditions met for: '.($level === null ? 'no level' : ucfirst($level->value))."\n";
+    echo "The auditor's check, regeneration before each hearing and the representative's control are for the statement to attest.\n";
+
+    foreach ($report->blocking() as $condition => $findings) {
+        echo "\n{$condition}:\n";
+
+        foreach (array_slice($findings, 0, 10) as $finding) {
+            echo "  ✗ {$finding}\n";
+        }
+
+        if (count($findings) > 10) {
+            echo '  and '.(count($findings) - 10)." more\n";
+        }
+    }
+
+    return $level === null ? 1 : 0;
+}
+
+/**
+ * @param  array<string, string|true>  $options
+ */
+function statement(Report $report, array $options): int
+{
+    $auditor = isset($options['auditor-firm'])
+        ? ['firm' => $options['auditor-firm'], 'standard' => $options['auditor-standard'] ?? '', 'report_date' => $options['auditor-date'] ?? '']
+        : null;
+
+    $statement = Statement::draft(
+        $report,
+        isset($options['level']) ? Level::from($options['level']) : null,
+        $auditor,
+        $options['issued-on'] ?? null,
+    );
+
+    echo json_encode($statement, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)."\n";
+
+    return 0;
+}
+
+function manifest(Report $report): int
+{
+    $digests = $report->digests;
+    ksort($digests, SORT_STRING);
+
+    foreach ($digests as $id => $digest) {
+        echo "{$id} {$digest}\n";
+    }
+
+    echo "root {$report->root}\n";
+
+    return 0;
+}
+
+/**
+ * @param  list<string>  $arguments
+ * @return array{0: ?string, 1: ?string, 2: array<string, string|true>}
+ */
+function arguments(array $arguments): array
+{
+    $positional = [];
+    $options = [];
+
+    foreach ($arguments as $argument) {
+        if (str_starts_with($argument, '--')) {
+            [$name, $value] = explode('=', substr($argument, 2), 2) + [1 => true];
+            $options[$name] = $value;
+        } else {
+            $positional[] = $argument;
+        }
+    }
+
+    return [$positional[0] ?? null, $positional[1] ?? null, $options];
+}
+
+function number(int $value): string
+{
+    return number_format($value, 0, ',', '.');
+}
+
+function percent(float $value): string
+{
+    return number_format($value, 3, ',', '.').'%';
+}
