@@ -2,6 +2,7 @@
 <?php
 
 use Steddle\Vcrs\Annex;
+use Steddle\Vcrs\Canonical;
 use Steddle\Vcrs\Check;
 use Steddle\Vcrs\InvalidRegister;
 use Steddle\Vcrs\Level;
@@ -30,18 +31,28 @@ const USAGE = 'VCRS '.Vcrs::VERSION.": check a claimant register against the Ver
   vcrs manifest <register.json> [--records=<records.csv>]
       Print the snapshot manifest (one line per record: id and digest) and its root, to anchor in time.
 
+  vcrs proof <register.json> --record=<id> [--records=<records.csv>]
+      Print one record's line, its inclusion proof and the snapshot root as JSON, for the person the record is of.
+
+  vcrs verify <proof.json> --root=<sha256:...>
+      Check a proof from vcrs proof against the anchored root, without the register.
+
 The annex is the one the register names.
 
 TXT;
 
 [$command, $path, $options] = arguments(array_slice($argv, 1));
 
-if ($command === null || $path === null || ! in_array($command, ['check', 'statement', 'manifest'], true)) {
+if ($command === null || $path === null || ! in_array($command, ['check', 'statement', 'manifest', 'proof', 'verify'], true)) {
     fwrite(STDERR, USAGE);
     exit(2);
 }
 
 try {
+    if ($command === 'verify') {
+        exit(verify($path, $options));
+    }
+
     $register = Register::read($path, $options['records'] ?? null);
     $report = Check::run($register, Annex::load($register->data['annex']));
 
@@ -49,6 +60,7 @@ try {
         'check' => check($report, isset($options['json'])),
         'statement' => statement($report, $options),
         'manifest' => manifest($report),
+        'proof' => proof($report, $options),
     });
 } catch (InvalidRegister $invalid) {
     fwrite(STDERR, "The register is not valid:\n  ".implode("\n  ", $invalid->errors)."\n");
@@ -144,14 +156,57 @@ function statement(Report $report, array $options): int
 
 function manifest(Report $report): int
 {
-    $digests = $report->digests;
-    ksort($digests, SORT_STRING);
-
-    foreach ($digests as $id => $digest) {
-        echo "{$id} {$digest}\n";
+    foreach (Canonical::lines($report->digests) as $line) {
+        echo "{$line}\n";
     }
 
     echo "root {$report->root}\n";
+
+    return 0;
+}
+
+/**
+ * @param  array<string, string|true>  $options
+ */
+function proof(Report $report, array $options): int
+{
+    if (! is_string($options['record'] ?? null)) {
+        fwrite(STDERR, USAGE);
+
+        return 2;
+    }
+
+    echo json_encode(Canonical::proof($report->digests, $options['record']), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)."\n";
+
+    return 0;
+}
+
+/**
+ * @param  array<string, string|true>  $options
+ */
+function verify(string $path, array $options): int
+{
+    if (! is_string($options['root'] ?? null)) {
+        fwrite(STDERR, USAGE);
+
+        return 2;
+    }
+
+    $proof = is_file($path) ? json_decode((string) file_get_contents($path), true) : null;
+
+    if (! is_string($proof['line'] ?? null) || ! is_int($proof['index'] ?? null) || ! is_int($proof['size'] ?? null) || ! is_array($proof['proof'] ?? null)) {
+        fwrite(STDERR, "{$path} is not a proof from vcrs proof: it needs line, index, size and proof.\n");
+
+        return 1;
+    }
+
+    if (! Canonical::includes($options['root'], $proof['line'], $proof['index'], $proof['size'], $proof['proof'])) {
+        echo "✗ The proof does not place '{$proof['line']}' under {$options['root']}.\n";
+
+        return 1;
+    }
+
+    echo "✓ '{$proof['line']}' is in the snapshot under {$options['root']}.\n";
 
     return 0;
 }

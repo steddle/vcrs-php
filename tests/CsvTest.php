@@ -30,7 +30,7 @@ it('reads a csv saved with a byte order mark', function () {
     $csv = templateCsv(fn (string $text) => "\u{FEFF}".$text);
 
     expect(Check::run(Register::read(template('register.json'), $csv), Annex::load('nl'))->root)
-        ->toBe('sha256:2f4447806f0aeddb4f7768fe40c6b34aa55fb950d02385e5316da2bc4af420b5');
+        ->toBe('sha256:bd16f0dd9c9205fe559998e18a1424442e40f79e0d2f2696c5e9ce986da80cf2');
 });
 
 it('refuses a csv separated by semicolons', function () {

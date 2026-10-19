@@ -32,7 +32,7 @@ it('checks the template register at level verified', function () {
 
     expect($report->counts())->toBe(['A' => 1, 'B' => 2, 'C' => 2, 'D' => 2, 'inactive' => 1])
         ->and($report->coverage()['C'])->toBe(['records' => 5, 'low' => round(5 / 26000 * 100, 4), 'high' => round(5 / 21000 * 100, 4)])
-        ->and($report->root)->toBe('sha256:2f4447806f0aeddb4f7768fe40c6b34aa55fb950d02385e5316da2bc4af420b5')
+        ->and($report->root)->toBe('sha256:bd16f0dd9c9205fe559998e18a1424442e40f79e0d2f2696c5e9ce986da80cf2')
         ->and($report->findings)->toBe([])
         ->and($report->level())->toBe(Level::Verified);
 });
@@ -183,6 +183,23 @@ it('gives manifest the root check gives when an id repeats', function () {
     $check = json_decode(shell_exec("php {$vcrs} check --json ".escapeshellarg($path)), true);
 
     expect($manifest)->toEndWith("root {$check['snapshot_root']}\n");
+});
+
+it('proves a record against the anchored root without the register', function () {
+    $vcrs = escapeshellarg(dirname(__DIR__).'/bin/vcrs');
+    $anchored = json_decode(file_get_contents(template('register.json')), true)['anchor']['root'];
+    $path = tempnam(sys_get_temp_dir(), 'vcrs').'.json';
+    file_put_contents($path, shell_exec("php {$vcrs} proof ".escapeshellarg(template('register.json')).' --records='.escapeshellarg(template('records.csv')).' --record=r-0003'));
+    $line = json_decode(file_get_contents($path), true)['line'];
+
+    exec("php {$vcrs} verify ".escapeshellarg($path).' --root='.escapeshellarg($anchored), $held, $heldStatus);
+    exec("php {$vcrs} verify ".escapeshellarg($path).' --root=sha256:'.str_repeat('0', 64), $refused, $refusedStatus);
+
+    expect($line)->toStartWith('r-0003 sha256:')
+        ->and($heldStatus)->toBe(0)
+        ->and($held[0])->toBe("✓ '{$line}' is in the snapshot under {$anchored}.")
+        ->and($refusedStatus)->toBe(1)
+        ->and($refused[0])->toStartWith('✗');
 });
 
 it('reports the whole check as an array', function () {
