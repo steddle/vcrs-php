@@ -202,6 +202,15 @@ it('proves a record against the anchored root without the register', function ()
         ->and($refused[0])->toStartWith('✗');
 });
 
+it('prints the check\'s figures as the standard writes them, a hard space between thousands and a point before the decimals', function () {
+    $vcrs = escapeshellarg(dirname(__DIR__).'/bin/vcrs');
+
+    exec("php {$vcrs} check ".escapeshellarg(template('register.json')).' --records='.escapeshellarg(template('records.csv')), $output);
+
+    expect($output)->toContain("Denominator: 21\u{00A0}000 to 26\u{00A0}000 (RDW open data, registrations of the models concerned, times the take rate of package X in the defendant's annual report, 2026-09-01)")
+        ->toContain('  A or better             1   0.004% to 0.005%');
+});
+
 it('reports the whole check as an array', function () {
     $report = templateReport()->toArray();
 

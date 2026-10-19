@@ -94,11 +94,11 @@ function check(Report $report, bool $json): int
     printf("  %-14s %10s   %s\n", 'Grade', 'Records', 'Coverage');
 
     foreach ($report->coverage() as $grade => $share) {
-        printf("  %-14s %10s   %s\n", "{$grade} or better", number($share['records']), percent($share['low']).($share['low'] === $share['high'] ? '' : ' to '.percent($share['high'])));
+        printf("  %-14s %s   %s\n", "{$grade} or better", mb_str_pad(number($share['records']), 10, ' ', STR_PAD_LEFT), percent($share['low']).($share['low'] === $share['high'] ? '' : ' to '.percent($share['high'])));
     }
 
-    printf("  %-14s %10s\n", 'D', number($counts['D']));
-    printf("  %-14s %10s\n\n", 'Not active', number($counts['inactive']));
+    printf("  %-14s %s\n", 'D', mb_str_pad(number($counts['D']), 10, ' ', STR_PAD_LEFT));
+    printf("  %-14s %s\n\n", 'Not active', mb_str_pad(number($counts['inactive']), 10, ' ', STR_PAD_LEFT));
 
     if ($report->reasons() !== []) {
         echo "Why records hold their grade:\n";
@@ -234,10 +234,10 @@ function arguments(array $arguments): array
 
 function number(int $value): string
 {
-    return number_format($value, 0, ',', '.');
+    return number_format($value, 0, '.', "\u{00A0}");
 }
 
 function percent(float $value): string
 {
-    return number_format($value, 3, ',', '.').'%';
+    return number_format($value, 3, '.', "\u{00A0}").'%';
 }
