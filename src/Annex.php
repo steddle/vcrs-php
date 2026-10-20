@@ -8,7 +8,7 @@ final readonly class Annex
 {
     /**
      * @param  string|null  $forum  the country whose courts hear the action, as ISO 3166-1 alpha-2
-     * @param  bool  $optInAbroad  whether a person resident outside the forum is represented only on an express opt-in
+     * @param  bool|'directive'  $optInAbroad  whether a person resident outside the forum is represented only on an express opt-in, or 'directive' where only in an action under the forum's transposition of Directive (EU) 2020/1828
      * @param  bool  $optInWindow  whether people abroad opt in during a window the court sets after the representative is appointed
      * @param  string|null  $optInChannel  the channel the law names for an opt-in, which the court's own channel replaces (Window), or null where the law names none
      * @param  bool  $parallelDeclarationAbroad  whether that person must also declare they are not represented elsewhere on the same claim
@@ -18,7 +18,7 @@ final readonly class Annex
         public string $code,
         public string $title,
         public ?string $forum,
-        public bool $optInAbroad,
+        public bool|string $optInAbroad,
         public bool $optInWindow,
         public ?string $optInChannel,
         public bool $parallelDeclarationAbroad,
@@ -31,6 +31,16 @@ final readonly class Annex
     public static function core(): self
     {
         return new self('core', 'Core', null, false, false, null, false, []);
+    }
+
+    /**
+     * Section 4.6: the annex as it applies to one action, which the export states is or is not under Directive (EU) 2020/1828.
+     */
+    public function forAction(bool $directive): self
+    {
+        $optInAbroad = $this->optInAbroad === 'directive' ? $directive : $this->optInAbroad;
+
+        return new self($this->code, $this->title, $this->forum, $optInAbroad, $this->optInWindow, $this->optInChannel, $this->parallelDeclarationAbroad, $this->schemes);
     }
 
     /**

@@ -10,7 +10,7 @@ use Steddle\Vcrs\Report;
 use Steddle\Vcrs\Statement;
 use Steddle\Vcrs\Vcrs;
 
-function templateReport(?callable $change = null): Report
+function templateReport(?callable $change = null, string $annex = 'nl'): Report
 {
     $path = template('register.json');
 
@@ -21,10 +21,10 @@ function templateReport(?callable $change = null): Report
         $path = tempnam(sys_get_temp_dir(), 'vcrs').'.json';
         file_put_contents($path, json_encode($document, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
 
-        return Check::run(Register::read($path), Annex::load('nl'));
+        return Check::run(Register::read($path), Annex::load($annex));
     }
 
-    return Check::run(Register::read($path, template('records.csv')), Annex::load('nl'));
+    return Check::run(Register::read($path, template('records.csv')), Annex::load($annex));
 }
 
 it('checks the template register at level verified', function () {
@@ -146,6 +146,20 @@ it('counts a record abroad without an opt-in until the window closes', function 
     'no window has closed' => [null, 'C'],
     'the window is still open' => ['2026-10-31', 'C'],
     'the window has closed' => ['2026-10-01', 'D'],
+]);
+
+it('asks a record abroad for its opt-in under Annex PT only in an action under the Directive', function (bool $directive, string $grade) {
+    $report = templateReport(function (array $document) use ($directive) {
+        $document['annex'] = 'pt';
+        $document['action']['directive'] = $directive;
+
+        return $document;
+    }, 'pt');
+
+    expect($report->gradings['r-0002']->grade->value)->toBe($grade);
+})->with([
+    'under DL 114-A/2023' => [true, 'D'],
+    'under the LAP alone' => [false, 'B'],
 ]);
 
 it('meets no level when the opt-in window has no opening day on or before its closing day', function (?string $openedOn) {

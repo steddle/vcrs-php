@@ -11,6 +11,7 @@ final class Check
     public static function run(Register $register, Annex $annex): Report
     {
         $data = $register->data;
+        $annex = $annex->forAction($data['action']['directive']);
         $grader = new Grader($register->informing(), $annex, $annex->optInDue($data['opt_in_closed_on'], $data['reference_date']), Window::from($data));
 
         $gradings = [];
