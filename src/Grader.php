@@ -34,7 +34,7 @@ final readonly class Grader
             ! $identity['name'] ? Reason::NoName : null,
             ! $this->distinct($record['party'], $identity) ? Reason::NotDistinct : null,
             ! $identity['contact_confirmed'] ? Reason::UnconfirmedContact : null,
-            ...$this->abroad($record),
+            ...$this->optIn($record),
         ]));
 
         if ($notCounted !== []) {
@@ -57,29 +57,33 @@ final readonly class Grader
     }
 
     /**
-     * Section 4.6: where the annex binds people abroad only on an opt-in, a record abroad without one is not counted
-     * once the opt-in is due.
+     * Section 4.6: where the annex binds people only on an opt-in, those abroad, those resident or both, a record that
+     * must opt in and holds no opt-in is not counted once the opt-in is due. Residence decides only where one of the two
+     * opts in and the other does not.
      *
      * @param  array<string, mixed>  $record
      * @return list<Reason>
      */
-    private function abroad(array $record): array
+    private function optIn(array $record): array
     {
-        if ($this->annex->forum === null || ! $this->annex->optInAbroad) {
+        if ($this->annex->forum === null || (! $this->annex->optInAbroad && ! $this->annex->optInResidents)) {
             return [];
         }
 
-        if (! isset($record['residence'])) {
+        if (! ($this->annex->optInAbroad && $this->annex->optInResidents) && ! isset($record['residence'])) {
             return [Reason::ResidenceUnknown];
         }
 
-        if ($record['residence']['country'] === $this->annex->forum || ! $this->optInDue) {
+        $mustOptIn = ($this->annex->optInAbroad && $this->annex->optInResidents)
+            || ($record['residence']['country'] === $this->annex->forum ? $this->annex->optInResidents : $this->annex->optInAbroad);
+
+        if (! $mustOptIn || ! $this->optInDue) {
             return [];
         }
 
         return array_values(array_filter([
             ! $this->optedIn($record['opt_in'] ?? null) ? Reason::NotOptedIn : null,
-            $this->annex->parallelDeclarationAbroad && ! ($record['parallel_declared'] ?? false) ? Reason::NoParallelDeclaration : null,
+            $this->annex->parallelDeclaration && ! ($record['parallel_declared'] ?? false) ? Reason::NoParallelDeclaration : null,
         ]));
     }
 

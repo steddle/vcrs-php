@@ -9,9 +9,10 @@ final readonly class Annex
     /**
      * @param  string|null  $forum  the country whose courts hear the action, as ISO 3166-1 alpha-2
      * @param  bool|'directive'  $optInAbroad  whether a person resident outside the forum is represented only on an express opt-in, or 'directive' where only in an action under the forum's transposition of Directive (EU) 2020/1828
-     * @param  bool  $optInWindow  whether people abroad opt in during a window the court sets after the representative is appointed
+     * @param  bool  $optInResidents  whether a person resident in the forum is likewise represented only on an express opt-in
+     * @param  bool  $optInWindow  whether people opt in during a window the court sets after the representative is appointed
      * @param  string|null  $optInChannel  the channel the law names for an opt-in, which the court's own channel replaces (Window), or null where the law names none
-     * @param  bool  $parallelDeclarationAbroad  whether that person must also declare they are not represented elsewhere on the same claim
+     * @param  bool  $parallelDeclaration  whether every opt-in must also declare that the person is not represented elsewhere on the same claim
      * @param  list<string>  $schemes  identification schemes, beside eidas, that count as recognised for grade A
      */
     public function __construct(
@@ -19,9 +20,10 @@ final readonly class Annex
         public string $title,
         public ?string $forum,
         public bool|string $optInAbroad,
+        public bool $optInResidents,
         public bool $optInWindow,
         public ?string $optInChannel,
-        public bool $parallelDeclarationAbroad,
+        public bool $parallelDeclaration,
         public array $schemes,
     ) {}
 
@@ -30,7 +32,7 @@ final readonly class Annex
      */
     public static function core(): self
     {
-        return new self('core', 'Core', null, false, false, null, false, []);
+        return new self('core', 'Core', null, false, false, false, null, false, []);
     }
 
     /**
@@ -40,16 +42,16 @@ final readonly class Annex
     {
         $optInAbroad = $this->optInAbroad === 'directive' ? $directive : $this->optInAbroad;
 
-        return new self($this->code, $this->title, $this->forum, $optInAbroad, $this->optInWindow, $this->optInChannel, $this->parallelDeclarationAbroad, $this->schemes);
+        return new self($this->code, $this->title, $this->forum, $optInAbroad, $this->optInResidents, $this->optInWindow, $this->optInChannel, $this->parallelDeclaration, $this->schemes);
     }
 
     /**
-     * Section 4.6: whether a record abroad needs its opt-in at the reference date. With a window,
+     * Section 4.6: whether a record that must opt in needs its opt-in at the reference date. With a window,
      * only once it has closed; a null closing day means none has closed, or the court applied opt-out abroad.
      */
     public function optInDue(?string $closedOn, ?string $referenceDate): bool
     {
-        if (! $this->optInAbroad) {
+        if (! $this->optInAbroad && ! $this->optInResidents) {
             return false;
         }
 
@@ -71,9 +73,10 @@ final readonly class Annex
             $annex['title'],
             $annex['forum'],
             $annex['opt_in_abroad'],
+            $annex['opt_in_residents'],
             $annex['opt_in_window'],
             $annex['opt_in_channel'],
-            $annex['parallel_declaration_abroad'],
+            $annex['parallel_declaration'],
             $annex['schemes'],
         );
     }

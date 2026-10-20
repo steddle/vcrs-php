@@ -3,7 +3,7 @@
 namespace Steddle\Vcrs;
 
 /**
- * The window the court set for people abroad to opt in (section 4.6), as the export states it.
+ * The window the court set for the people who must opt in (section 4.6), as the export states it.
  */
 final readonly class Window
 {
