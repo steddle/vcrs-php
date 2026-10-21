@@ -162,6 +162,13 @@ it('asks a record abroad for its opt-in under Annex PT only in an action under t
     'under the LAP alone' => [false, 'B'],
 ]);
 
+it('asks the export to state whether residents opt in where the annex leaves it to the action', function () {
+    $report = Check::run(Register::read(template('register.json'), template('records.csv')), new Annex('be', 'Annex BE', 'BE', true, 'action', true, 'registry', false, []));
+
+    expect($report->findings['register_consistent'])->toContain('Annex be leaves it to the action whether residents opt in, and the export does not state it.')
+        ->and($report->level())->toBeNull();
+});
+
 it('meets no level when the opt-in window has no opening day on or before its closing day', function (?string $openedOn) {
     $report = templateReport(function (array $document) use ($openedOn) {
         $document['opt_in_opened_on'] = $openedOn;

@@ -11,12 +11,17 @@ final class Check
     public static function run(Register $register, Annex $annex): Report
     {
         $data = $register->data;
-        $annex = $annex->forAction($data['action']['directive']);
+        $findings = [];
+
+        if ($annex->optInResidents === 'action' && $data['opt_in_residents'] === null) {
+            $findings['register_consistent'][] = "Annex {$annex->code} leaves it to the action whether residents opt in, and the export does not state it.";
+        }
+
+        $annex = $annex->forAction($data['action']['directive'], $data['opt_in_residents']);
         $grader = new Grader($register->informing(), $annex, $annex->optInDue($data['opt_in_closed_on'], $data['reference_date']), Window::from($data));
 
         $gradings = [];
         $digests = [];
-        $findings = [];
 
         foreach ($register->records as $index => $raw) {
             $record = $data['records'][$index];

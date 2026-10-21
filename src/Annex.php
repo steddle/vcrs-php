@@ -9,7 +9,7 @@ final readonly class Annex
     /**
      * @param  string|null  $forum  the country whose courts hear the action, as ISO 3166-1 alpha-2
      * @param  bool|'directive'  $optInAbroad  whether a person resident outside the forum is represented only on an express opt-in, or 'directive' where only in an action under the forum's transposition of Directive (EU) 2020/1828
-     * @param  bool  $optInResidents  whether a person resident in the forum is likewise represented only on an express opt-in
+     * @param  bool|'action'  $optInResidents  whether a person resident in the forum is likewise represented only on an express opt-in, or 'action' where the court or an approved agreement chooses it for each action
      * @param  bool  $optInWindow  whether people opt in during a window the court sets after the representative is appointed
      * @param  string|null  $optInChannel  the channel the law names for an opt-in, which the court's own channel replaces (Window), or null where the law names none
      * @param  bool  $parallelDeclaration  whether every opt-in must also declare that the person is not represented elsewhere on the same claim
@@ -20,7 +20,7 @@ final readonly class Annex
         public string $title,
         public ?string $forum,
         public bool|string $optInAbroad,
-        public bool $optInResidents,
+        public bool|string $optInResidents,
         public bool $optInWindow,
         public ?string $optInChannel,
         public bool $parallelDeclaration,
@@ -36,13 +36,16 @@ final readonly class Annex
     }
 
     /**
-     * Section 4.6: the annex as it applies to one action, which the export states is or is not under Directive (EU) 2020/1828.
+     * Section 4.6: the annex as it applies to one action, as the export states it: under Directive (EU) 2020/1828 or not,
+     * and, where the annex leaves it to the action, whether residents opt in. An action that leaves the latter unstated
+     * binds residents on an opt-in, the stricter reading; Check reports the gap.
      */
-    public function forAction(bool $directive): self
+    public function forAction(bool $directive, ?bool $residents = null): self
     {
         $optInAbroad = $this->optInAbroad === 'directive' ? $directive : $this->optInAbroad;
+        $optInResidents = $this->optInResidents === 'action' ? ($residents ?? true) : $this->optInResidents;
 
-        return new self($this->code, $this->title, $this->forum, $optInAbroad, $this->optInResidents, $this->optInWindow, $this->optInChannel, $this->parallelDeclaration, $this->schemes);
+        return new self($this->code, $this->title, $this->forum, $optInAbroad, $optInResidents, $this->optInWindow, $this->optInChannel, $this->parallelDeclaration, $this->schemes);
     }
 
     /**
