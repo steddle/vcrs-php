@@ -17,6 +17,14 @@ final class Check
             $findings['register_consistent'][] = "Annex {$annex->code} leaves it to the action whether residents opt in, and the export does not state it.";
         }
 
+        if (! $annex->optInWindow) {
+            foreach (['opt_in_opened_on', 'opt_in_closed_on', 'opt_in_channel'] as $field) {
+                if ($data[$field] !== null) {
+                    $findings['register_consistent'][] = "Annex {$annex->code} has no opt-in window, and the export states {$field}.";
+                }
+            }
+        }
+
         $annex = $annex->forAction($data['action']['directive'], $data['opt_in_residents']);
         $grader = new Grader($register->informing(), $annex, $annex->optInDue($data['opt_in_closed_on'], $data['reference_date']), Window::from($data));
 

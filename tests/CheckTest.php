@@ -10,9 +10,10 @@ use Steddle\Vcrs\Report;
 use Steddle\Vcrs\Statement;
 use Steddle\Vcrs\Vcrs;
 
-function templateReport(?callable $change = null, string $annex = 'nl'): Report
+function templateReport(?callable $change = null, string|Annex $annex = 'nl'): Report
 {
     $path = template('register.json');
+    $annex = $annex instanceof Annex ? $annex : Annex::load($annex);
 
     if ($change !== null) {
         $document = json_decode(file_get_contents($path), true);
@@ -21,10 +22,10 @@ function templateReport(?callable $change = null, string $annex = 'nl'): Report
         $path = tempnam(sys_get_temp_dir(), 'vcrs').'.json';
         file_put_contents($path, json_encode($document, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
 
-        return Check::run(Register::read($path), Annex::load($annex));
+        return Check::run(Register::read($path), $annex);
     }
 
-    return Check::run(Register::read($path, template('records.csv')), Annex::load($annex));
+    return Check::run(Register::read($path, template('records.csv')), $annex);
 }
 
 it('checks the template register at level verified', function () {
@@ -168,6 +169,24 @@ it('asks the export to state whether residents opt in where the annex leaves it 
     expect($report->findings['register_consistent'])->toContain('Annex be leaves it to the action whether residents opt in, and the export does not state it.')
         ->and($report->level())->toBeNull();
 });
+
+it('meets no level when the export states an opt-in window or channel the annex does not have', function (string $field, string $value) {
+    $annex = new Annex('nl', 'Annex NL', 'NL', false, false, false, null, false, ['idin', 'eherkenning']);
+
+    $report = templateReport(function (array $document) use ($field, $value) {
+        $document[$field] = $value;
+
+        return $document;
+    }, $annex);
+
+    expect(templateReport(annex: $annex)->level())->toBe(Level::Verified)
+        ->and($report->findings['register_consistent'])->toContain("Annex nl has no opt-in window, and the export states {$field}.")
+        ->and($report->level())->toBeNull();
+})->with([
+    'an opening day' => ['opt_in_opened_on', '2026-09-01'],
+    'a closing day' => ['opt_in_closed_on', '2026-10-01'],
+    'a channel' => ['opt_in_channel', 'web'],
+]);
 
 it('meets no level when the opt-in window has no opening day on or before its closing day', function (?string $openedOn) {
     $report = templateReport(function (array $document) use ($openedOn) {
