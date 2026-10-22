@@ -131,8 +131,8 @@ it('fills in the example statement with the statement drafted for the example re
         expect($markdown)->toContain("| {$grade} or better | {$records} | {$low}% to {$high}% |");
     }
 
-    expect($markdown)->toContain("| D, not counted | {$statement['counts']['D']} | |")
-        ->toContain("| Not active | {$statement['counts']['inactive']} | |")
+    expect($markdown)->toContain("| D, active | {$statement['counts']['D']} | |")
+        ->toContain("| D, not active | {$statement['counts']['inactive']} | |")
         ->toContain("| Records in the snapshot | {$statement['snapshot']['records']} |")
         ->toContain("| Snapshot root | {$statement['snapshot']['root']} |");
 });
