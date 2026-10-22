@@ -7,7 +7,7 @@ use Opis\JsonSchema\Validator;
 
 final class Schema
 {
-    private const BASE = 'https://vcrs.steddle.com/schema/'.Vcrs::VERSION.'/';
+    private const BASE = 'https://vcrs.org/schema/'.Vcrs::VERSION.'/';
 
     /**
      * The schema errors of a decoded document, as 'pointer: message' lines. Empty when it validates.

@@ -6,7 +6,7 @@ it('names the version the validator implements wherever the standard names a ver
     $named = [];
 
     foreach (new RecursiveIteratorIterator(new RecursiveDirectoryIterator(standardFile(''), FilesystemIterator::SKIP_DOTS)) as $file) {
-        preg_match_all('#(?:VCRS |vcrs\.steddle\.com/v/)(\d+\.\d+\.\d+(?:-[0-9A-Za-z]+(?:\.[0-9A-Za-z]+)*)?)#', file_get_contents($file->getPathname()), $versions);
+        preg_match_all('#(?:VCRS |vcrs\.org/v/)(\d+\.\d+\.\d+(?:-[0-9A-Za-z]+(?:\.[0-9A-Za-z]+)*)?)#', file_get_contents($file->getPathname()), $versions);
 
         if ($versions[1] !== []) {
             $named[substr($file->getPathname(), strlen(standardFile('')))] = array_unique($versions[1]);
@@ -22,7 +22,7 @@ it('names the version the validator implements wherever the standard names a ver
 
 it('gives every schema the address the validator resolves it at', function (string $schema) {
     expect(json_decode(file_get_contents(standardFile("schema/{$schema}.schema.json")), true)['$id'])
-        ->toBe('https://vcrs.steddle.com/schema/'.Vcrs::VERSION."/{$schema}.schema.json");
+        ->toBe('https://vcrs.org/schema/'.Vcrs::VERSION."/{$schema}.schema.json");
 })->with(['export', 'record', 'conformance']);
 
 it('requires the version in an export and a statement, and the example register states it', function () {
