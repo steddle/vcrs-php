@@ -117,6 +117,26 @@ it('drafts a conformance statement its schema accepts', function () {
         ->and($statement['snapshot']['records'])->toBe(8);
 });
 
+it('fills in the example statement with the statement drafted for the example register', function () {
+    $markdown = file_get_contents(template('conformance-statement-example.md'));
+    preg_match('/```json\n(.*?)```/s', $markdown, $json);
+    $example = json_decode($json[1], true);
+    $statement = Statement::draft(templateReport(), auditor: array_diff_key($example['auditor'], ['check' => true]), issuedOn: $example['issued_on']);
+
+    expect($example)->toBe($statement);
+
+    foreach (['A', 'B', 'C'] as $grade) {
+        ['records' => $records, 'low' => $low, 'high' => $high] = $statement['coverage'][$grade];
+
+        expect($markdown)->toContain("| {$grade} or better | {$records} | {$low}% to {$high}% |");
+    }
+
+    expect($markdown)->toContain("| D, not counted | {$statement['counts']['D']} | |")
+        ->toContain("| Not active | {$statement['counts']['inactive']} | |")
+        ->toContain("| Records in the snapshot | {$statement['snapshot']['records']} |")
+        ->toContain("| Snapshot root | {$statement['snapshot']['root']} |");
+});
+
 it('refuses a statement above the level the register meets', function () {
     $report = templateReport(function ($document) {
         $document['flows'][0]['capture']['witnessed'] = null;
