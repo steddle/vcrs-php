@@ -18,7 +18,7 @@ final class Schema
     {
         $validator = new Validator;
         $validator->setMaxErrors(20);
-        $validator->resolver()->registerPrefix(self::BASE, dirname(__DIR__, 2).'/vcrs/schema/');
+        $validator->resolver()->registerPrefix(self::BASE, Vcrs::standard('schema/'));
 
         $result = $validator->validate($document, self::BASE.$schema.'.schema.json');
 

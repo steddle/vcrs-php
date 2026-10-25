@@ -59,7 +59,7 @@ final readonly class Annex
      */
     public static function load(string $code): self
     {
-        $path = dirname(__DIR__, 2)."/vcrs/annexes/{$code}.json";
+        $path = Vcrs::standard("annexes/{$code}.json");
 
         if (! preg_match('/^[a-z]{2}$/', $code) || ! is_file($path)) {
             throw new InvalidRegister(['/annex: VCRS '.Vcrs::VERSION." holds no annex '{$code}'."]);

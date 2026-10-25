@@ -1,0 +1,20 @@
+{
+    "name": "steddle/vcrs-php",
+    "description": "The reference validator of the Verified Claimant Register Standard: grades, coverage, the snapshot root, the manifest, inclusion proofs and the conformance statement.",
+    "license": "MIT",
+    "homepage": "https://vcrs.org",
+    "require": {
+        "php": "^8.3",
+        "ext-mbstring": "*",
+        "opis/json-schema": "^2.4",
+        "steddle/vcrs": "self.version"
+    },
+    "autoload": {
+        "psr-4": {
+            "Steddle\\Vcrs\\": "src/"
+        }
+    },
+    "bin": [
+        "bin/vcrs"
+    ]
+}
