@@ -5,6 +5,7 @@ use Steddle\Vcrs\Annex;
 use Steddle\Vcrs\Canonical;
 use Steddle\Vcrs\Check;
 use Steddle\Vcrs\InvalidRegister;
+use Steddle\Vcrs\Json;
 use Steddle\Vcrs\Level;
 use Steddle\Vcrs\Register;
 use Steddle\Vcrs\Report;
@@ -21,21 +22,34 @@ foreach ([__DIR__.'/../vendor/autoload.php', __DIR__.'/../../../autoload.php', _
 
 const USAGE = 'VCRS '.Vcrs::VERSION.": check a claimant register against the Verified Claimant Register Standard.\n".<<<'TXT'
 
-  vcrs check <register.json> [--records=<records.csv>] [--json]
-      Grade every record, measure coverage, compute the snapshot root, and say up to which level the export's conditions hold.
+  vcrs check <register.json> [--records=<records.csv>] [--json] [--expect=<expected.json>]
+      Grade every record, measure coverage, compute the snapshot root and the manifest, and say whether the export is
+      consistent, whether it verifies, and up to which level its conditions hold. With --expect, check every outcome
+      against the file, as the example's expected.json states them.
+
+  vcrs export <register.json> --records=<records.csv>
+      Print the export as one JSON document, its records read from the spreadsheet.
 
   vcrs statement <register.json> [--records=<records.csv>] [--level=registered|identified|verified]
                  [--auditor-firm=<name> --auditor-standard=<standard> --auditor-date=<YYYY-MM-DD>] [--issued-on=<YYYY-MM-DD>]
       Draft the conformance statement as JSON. Without the auditor it is a draft.
 
-  vcrs manifest <register.json> [--records=<records.csv>]
-      Print the snapshot manifest (one line per record: id and digest) and its root, to anchor in time.
+  vcrs manifest <register.json> [--records=<records.csv>] [--json]
+      Print the snapshot (one line per record: id and digest), its root and the manifest's digest, which is what is
+      anchored in time. With --json, print the manifest itself.
 
   vcrs proof <register.json> --record=<id> [--records=<records.csv>]
-      Print one record's line, its inclusion proof and the snapshot root as JSON, for the person the record is of.
+      Print one record's line, its inclusion proof, the snapshot root and the manifest's digest as JSON, for the person
+      the record is of.
 
   vcrs verify <proof.json> --root=<sha256:...>
-      Check a proof from vcrs proof against the anchored root, without the register.
+  vcrs verify <proof.json> --manifest=<manifest.json>
+      Check a proof from vcrs proof against the root, or against the root a manifest from vcrs manifest --json commits
+      to, without the register.
+
+Exit codes: 0 a level's conditions hold; 1 none does; 2 usage; 3 the input is not valid: a file that is missing or
+invalid, a record the register does not hold, an option the register does not bear out; 4 the export is not
+consistent; 5 it does not verify; 6 the outcomes differ from --expect; 70 the validator itself failed.
 
 The annex is the one the register names.
 
@@ -43,7 +57,7 @@ TXT;
 
 [$command, $path, $options] = arguments(array_slice($argv, 1));
 
-if ($command === null || $path === null || ! in_array($command, ['check', 'statement', 'manifest', 'proof', 'verify'], true)) {
+if ($command === null || $path === null || ! in_array($command, ['check', 'export', 'statement', 'manifest', 'proof', 'verify'], true)) {
     fwrite(STDERR, USAGE);
     exit(2);
 }
@@ -54,28 +68,55 @@ try {
     }
 
     $register = Register::read($path, $options['records'] ?? null);
+
+    if ($command === 'export') {
+        echo json_encode($register->document, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)."\n";
+
+        exit(0);
+    }
+
     $report = Check::run($register, Annex::load($register->data['annex']));
 
     exit(match ($command) {
-        'check' => check($report, isset($options['json'])),
+        'check' => check($report, isset($options['json']), $options['expect'] ?? null),
         'statement' => statement($report, $options),
-        'manifest' => manifest($report),
+        'manifest' => manifest($report, isset($options['json'])),
         'proof' => proof($report, $options),
     });
 } catch (InvalidRegister $invalid) {
-    fwrite(STDERR, "The register is not valid:\n  ".implode("\n  ", $invalid->errors)."\n");
-    exit(1);
+    fwrite(STDERR, "The input is not valid:\n  ".implode("\n  ", $invalid->errors)."\n");
+    exit(3);
+} catch (InvalidArgumentException $invalid) {
+    fwrite(STDERR, $invalid->getMessage()."\n");
+    exit(3);
 } catch (Throwable $error) {
-    fwrite(STDERR, $error->getMessage()."\n");
-    exit(1);
+    fwrite(STDERR, "The validator failed: {$error->getMessage()}\n");
+    exit(70);
 }
 
-function check(Report $report, bool $json): int
+/**
+ * 0 where a level's conditions hold, else 1; 4 where the export is not consistent, 5 where it does not verify.
+ */
+function outcome(Report $report): int
 {
+    return match (true) {
+        ! $report->consistent() => 4,
+        ! $report->verified() => 5,
+        $report->level() === null => 1,
+        default => 0,
+    };
+}
+
+function check(Report $report, bool $json, string|true|null $expect): int
+{
+    if (is_string($expect)) {
+        return against($report, $expect);
+    }
+
     if ($json) {
         echo json_encode($report->toArray(), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)."\n";
 
-        return $report->level() === null ? 1 : 0;
+        return outcome($report);
     }
 
     $data = $report->data;
@@ -97,8 +138,8 @@ function check(Report $report, bool $json): int
         printf("  %-14s %s   %s\n", "{$grade} or better", mb_str_pad(number($share['records']), 10, ' ', STR_PAD_LEFT), percent($share['low']).($share['low'] === $share['high'] ? '' : ' to '.percent($share['high'])));
     }
 
-    printf("  %-14s %s\n", 'D', mb_str_pad(number($counts['D']), 10, ' ', STR_PAD_LEFT));
-    printf("  %-14s %s\n\n", 'Not active', mb_str_pad(number($counts['inactive']), 10, ' ', STR_PAD_LEFT));
+    printf("  %-14s %s\n", 'D, active', mb_str_pad(number($counts['D']), 10, ' ', STR_PAD_LEFT));
+    printf("  %-14s %s\n\n", 'D, not active', mb_str_pad(number($counts['inactive']), 10, ' ', STR_PAD_LEFT));
 
     if ($report->reasons() !== []) {
         echo "Why records hold their grade:\n";
@@ -113,24 +154,75 @@ function check(Report $report, bool $json): int
     }
 
     echo "Snapshot root: {$report->root}\n";
+    echo "Manifest: {$report->manifestDigest}\n\n";
 
     $level = $report->level();
-    echo 'Export conditions met for: '.($level === null ? 'no level' : ucfirst($level->value))."\n";
+
+    echo match (true) {
+        ! $report->consistent() => "The export is not consistent, so it meets no level.\n",
+        ! $report->verified() => "The export does not verify, so it meets no level.\n",
+        default => 'Export conditions met for: '.($level === null ? 'no level' : ucfirst($level->value))."\n",
+    };
     echo "The auditor's check, regeneration before each hearing and the representative's control are for the statement to attest.\n";
 
-    foreach ($report->blocking() as $condition => $findings) {
-        echo "\n{$condition}:\n";
+    $blocking = $report->blocking();
 
-        foreach (array_slice($findings, 0, 10) as $finding) {
-            echo "  ✗ {$finding}\n";
+    if ($blocking !== []) {
+        echo "\n";
+
+        foreach (array_slice($blocking, 0, 20) as $finding) {
+            echo "  ✗ {$finding['code']->value} at {$finding['pointer']}: {$finding['message']}\n";
         }
 
-        if (count($findings) > 10) {
-            echo '  and '.(count($findings) - 10)." more\n";
+        if (count($blocking) > 20) {
+            echo '  and '.(count($blocking) - 20)." more\n";
         }
     }
 
-    return $level === null ? 1 : 0;
+    return outcome($report);
+}
+
+/**
+ * Every outcome the file states, against the check's: each record's grade, reasons and digest, the counts, the
+ * coverage, the root, the manifest, the level, and the finding codes.
+ */
+function against(Report $report, string $path): int
+{
+    $expected = Json::decode((string) file_get_contents($path));
+    $expected = json_decode(json_encode($expected, JSON_THROW_ON_ERROR), true, flags: JSON_THROW_ON_ERROR);
+    $actual = [
+        'records' => array_map(fn ($grading, $digest) => ['grade' => $grading->grade->value, 'reasons' => $grading->reasonCodes(), 'digest' => $digest], $report->gradings, $report->digests),
+        'counts' => $report->counts(),
+        'coverage' => $report->coverage(),
+        'root' => $report->root,
+        'manifest' => $report->manifestDigest,
+        'consistent' => $report->consistent(),
+        'verified' => $report->verified(),
+        'level' => $report->level()?->value,
+        'findings' => array_map(fn (array $finding) => $finding['code']->value, $report->findings),
+    ];
+    $actual['records'] = array_combine(array_keys($report->gradings), $actual['records']);
+    $differences = [];
+
+    foreach ($expected as $key => $value) {
+        if (! array_key_exists($key, $actual)) {
+            $differences[] = "{$key}: the check reports no such outcome.";
+        } elseif ($actual[$key] != $value) {
+            $differences[] = "{$key}: expected ".json_encode($value, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE).', the check gives '.json_encode($actual[$key], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE).'.';
+        }
+    }
+
+    foreach ($differences as $difference) {
+        echo "✗ {$difference}\n";
+    }
+
+    if ($differences === []) {
+        echo '✓ Every outcome '.basename($path)." states: '".implode("', '", array_keys($expected))."'.\n";
+
+        return 0;
+    }
+
+    return 6;
 }
 
 /**
@@ -138,13 +230,31 @@ function check(Report $report, bool $json): int
  */
 function statement(Report $report, array $options): int
 {
+    if (outcome($report) !== 0) {
+        fwrite(STDERR, match (outcome($report)) {
+            4 => 'The export is not consistent',
+            5 => 'The export does not verify',
+            default => 'The register meets no level',
+        }.", so it has no statement to make.\n");
+
+        return outcome($report);
+    }
+
+    $level = isset($options['level']) ? Level::tryFrom((string) $options['level']) : null;
+
+    if (isset($options['level']) && $level === null) {
+        fwrite(STDERR, USAGE);
+
+        return 2;
+    }
+
     $auditor = isset($options['auditor-firm'])
         ? ['firm' => $options['auditor-firm'], 'standard' => $options['auditor-standard'] ?? '', 'report_date' => $options['auditor-date'] ?? '']
         : null;
 
     $statement = Statement::draft(
         $report,
-        isset($options['level']) ? Level::from($options['level']) : null,
+        $level,
         $auditor,
         $options['issued-on'] ?? null,
     );
@@ -154,13 +264,26 @@ function statement(Report $report, array $options): int
     return 0;
 }
 
-function manifest(Report $report): int
+function manifest(Report $report, bool $json): int
 {
+    if (! $report->consistent()) {
+        fwrite(STDERR, "The export is not consistent, so it has no one snapshot: check it first.\n");
+
+        return 4;
+    }
+
+    if ($json) {
+        echo json_encode($report->manifest, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)."\n";
+
+        return 0;
+    }
+
     foreach (Canonical::lines($report->digests) as $line) {
         echo "{$line}\n";
     }
 
     echo "root {$report->root}\n";
+    echo "manifest {$report->manifestDigest}\n";
 
     return 0;
 }
@@ -176,7 +299,7 @@ function proof(Report $report, array $options): int
         return 2;
     }
 
-    echo json_encode(Canonical::proof($report->digests, $options['record']), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)."\n";
+    echo json_encode([...Canonical::proof($report->digests, $options['record']), 'manifest' => $report->manifestDigest], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)."\n";
 
     return 0;
 }
@@ -186,7 +309,23 @@ function proof(Report $report, array $options): int
  */
 function verify(string $path, array $options): int
 {
-    if (! is_string($options['root'] ?? null)) {
+    $root = $options['root'] ?? null;
+    $under = null;
+
+    if (is_string($options['manifest'] ?? null)) {
+        $manifest = is_file($options['manifest']) ? Json::decode((string) file_get_contents($options['manifest'])) : null;
+        $root = $manifest->records->root ?? null;
+
+        if (! is_string($root)) {
+            fwrite(STDERR, "{$options['manifest']} is not a manifest from vcrs manifest --json: it names no root.\n");
+
+            return 3;
+        }
+
+        $under = Canonical::manifestDigest($manifest);
+    }
+
+    if (! is_string($root)) {
         fwrite(STDERR, USAGE);
 
         return 2;
@@ -197,16 +336,20 @@ function verify(string $path, array $options): int
     if (! is_string($proof['line'] ?? null) || ! is_int($proof['index'] ?? null) || ! is_int($proof['size'] ?? null) || ! is_array($proof['proof'] ?? null)) {
         fwrite(STDERR, "{$path} is not a proof from vcrs proof: it needs line, index, size and proof.\n");
 
-        return 1;
+        return 3;
     }
 
-    if (! Canonical::includes($options['root'], $proof['line'], $proof['index'], $proof['size'], $proof['proof'])) {
-        echo "✗ The proof does not place '{$proof['line']}' under {$options['root']}.\n";
+    if (! Canonical::includes($root, $proof['line'], $proof['index'], $proof['size'], $proof['proof'])) {
+        echo "✗ The proof does not place '{$proof['line']}' under {$root}.\n";
 
-        return 1;
+        return 5;
     }
 
-    echo "✓ '{$proof['line']}' is in the snapshot under {$options['root']}.\n";
+    echo "✓ '{$proof['line']}' is in the snapshot under {$root}.\n";
+
+    if ($under !== null) {
+        echo "  The manifest {$under} commits to that root: check its anchor's timestamp against this digest.\n";
+    }
 
     return 0;
 }
@@ -237,7 +380,10 @@ function number(int $value): string
     return number_format($value, 0, '.', "\u{00A0}");
 }
 
+/**
+ * Coverage as Report rounds it, to four decimals, printed without rounding again.
+ */
 function percent(float $value): string
 {
-    return number_format($value, 3, '.', "\u{00A0}").'%';
+    return number_format($value, 4, '.', "\u{00A0}").'%';
 }

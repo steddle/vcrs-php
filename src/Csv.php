@@ -6,8 +6,9 @@ use InvalidArgumentException;
 use stdClass;
 
 /**
- * Records from a spreadsheet, one row each, in the columns of templates/records.csv.
- * A column named facet.<name> holds that facet's value; evidence is type:digest pairs separated by |.
+ * Records from a spreadsheet, one row each, in the columns of templates/records.csv. A column named facet.<name> holds
+ * that facet's value; evidence is type:digest pairs separated by |, and parts are separated by | too. An optional
+ * column left empty leaves its member out of the record.
  */
 final class Csv
 {
@@ -84,12 +85,28 @@ final class Csv
             ? ['registration_number' => self::bool($row, 'registration_number')]
             : ['birth_date' => self::bool($row, 'birth_date')];
 
+        if (($row['register_check_on'] ?? '') !== '') {
+            $identity['register_check'] = ['register' => $row['register_check_register'] ?? '', 'on' => $row['register_check_on']];
+        }
+
+        if (($row['authority_on'] ?? '') !== '') {
+            $identity['authority'] = [
+                'role' => $row['authority_role'] ?? '',
+                'basis' => $row['authority_basis'] ?? '',
+                'checked_against' => $row['authority_checked_against'] ?? '',
+                'on' => $row['authority_on'],
+            ];
+        }
+
         $record = [
             'id' => $row['id'],
             'party' => $row['party'],
             'status' => $row['status'],
+            ...(($row['status_on'] ?? '') !== '' ? ['status_on' => $row['status_on']] : []),
+            ...(($row['status_reason'] ?? '') !== '' ? ['status_reason' => $row['status_reason']] : []),
             'joined_on' => $row['joined_on'],
             'flow' => $row['flow'],
+            ...(($row['confirmed_on'] ?? '') !== '' ? ['confirmed' => ['flow' => $row['confirmed_flow'] ?? '', 'on' => $row['confirmed_on']]] : []),
             'terms' => $row['terms'],
             'identity' => $identity,
             'membership' => [
@@ -102,11 +119,19 @@ final class Csv
         ];
 
         if (($row['residence_country'] ?? '') !== '') {
-            $record['residence'] = ['country' => $row['residence_country'], 'on' => $row['residence_on'] ?? ''];
+            $record['residence'] = [
+                'country' => $row['residence_country'],
+                'on' => $row['residence_on'] ?? '',
+                ...(($row['residence_source'] ?? '') !== '' ? ['source' => $row['residence_source']] : []),
+            ];
         }
 
         if (($row['opt_in_on'] ?? '') !== '') {
-            $record['opt_in'] = ['on' => $row['opt_in_on'], 'channel' => $row['opt_in_channel'] ?? ''];
+            $record['opt_in'] = ['on' => $row['opt_in_on'], 'channel' => $row['opt_in_channel'] ?? '', 'action' => $row['opt_in_action'] ?? ''];
+        }
+
+        if (($row['parts'] ?? '') !== '') {
+            $record['parts'] = explode('|', $row['parts']);
         }
 
         if (($row['parallel_declared'] ?? '') !== '') {

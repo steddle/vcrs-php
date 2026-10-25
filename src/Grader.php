@@ -3,20 +3,11 @@
 namespace Steddle\Vcrs;
 
 /**
- * The grade rules of section 4, applied to the facts on one record.
+ * The grade rules of section 4, applied to the facts on one record at the reference date.
  */
 final readonly class Grader
 {
-    /**
-     * @param  array<string, bool>  $informing  per flow version id, whether it states representative, defendant, claim and period
-     * @param  bool  $optInDue  whether a record abroad needs its opt-in at the reference date (Annex::optInDue)
-     */
-    public function __construct(
-        private array $informing,
-        private Annex $annex,
-        private bool $optInDue,
-        private Window $window,
-    ) {}
+    public function __construct(private Context $context) {}
 
     /**
      * @param  array<string, mixed>  $record
@@ -27,8 +18,8 @@ final readonly class Grader
         $membership = $record['membership'];
 
         $notCounted = array_values(array_filter([
-            $record['status'] !== 'active' ? Reason::NotActive : null,
-            ! ($this->informing[$record['flow']] ?? false) ? Reason::UninformedFlow : null,
+            $this->inactive($record) ? Reason::NotActive : null,
+            ! $this->informed($record) ? Reason::UninformedFlow : null,
             $record['duplicate_of'] !== null ? Reason::Duplicate : null,
             $membership['in_class'] === false ? Reason::OutsideClass : null,
             ! $identity['name'] ? Reason::NoName : null,
@@ -47,7 +38,7 @@ final readonly class Grader
             return new Grading(Grade::C, $notEvidenced);
         }
 
-        $notCorroborated = $this->notCorroborated($membership, $identity['verified']);
+        $notCorroborated = $this->notCorroborated($record);
 
         if ($notCorroborated !== []) {
             return new Grading(Grade::B, $notCorroborated);
@@ -57,47 +48,103 @@ final readonly class Grader
     }
 
     /**
-     * Section 4.6: where the annex binds people only on an opt-in, those abroad, those resident or both, a record that
-     * must opt in and holds no opt-in is not counted once the opt-in is due. Residence decides only where one of the two
-     * opts in and the other does not.
+     * Rule 1: a withdrawal, opt-out or exclusion dated after the reference date leaves the record active at it.
+     *
+     * @param  array<string, mixed>  $record
+     */
+    private function inactive(array $record): bool
+    {
+        return $record['status'] !== 'active' && (! isset($record['status_on']) || $this->context->holds($record['status_on']));
+    }
+
+    /**
+     * Rule 2 and section 5.1: the record joined through a flow version that informs, or the person confirmed, on or
+     * before the reference date, through one that does and was live that day.
+     *
+     * @param  array<string, mixed>  $record
+     */
+    private function informed(array $record): bool
+    {
+        $confirmed = $record['confirmed'] ?? null;
+
+        return $this->context->informs($record['flow'])
+            || ($confirmed !== null
+                && $this->context->informs($confirmed['flow'])
+                && $this->context->live($confirmed['flow'], $confirmed['on'])
+                && $this->context->holds($confirmed['on']));
+    }
+
+    /**
+     * Rule 8 and section 4.6: where the annex binds people abroad, those resident or both only on an opt-in, a record
+     * that must opt in is not counted once the opt-in is due without one made in time. Residence decides only where one
+     * of the two opts in and the other does not, and only on the date the court fixed for it where it fixed one.
      *
      * @param  array<string, mixed>  $record
      * @return list<Reason>
      */
     private function optIn(array $record): array
     {
-        if ($this->annex->forum === null || (! $this->annex->optInAbroad && ! $this->annex->optInResidents)) {
+        $annex = $this->context->annex;
+        $subgroup = $record['subgroup'] ?? null;
+        $residents = $this->context->residentsOptIn($subgroup);
+
+        if ($annex->forum === null || (! $annex->optInAbroad && ! $residents) || ! $this->context->inOptInPart($record)) {
             return [];
         }
 
-        if (! ($this->annex->optInAbroad && $this->annex->optInResidents) && ! isset($record['residence'])) {
-            return [Reason::ResidenceUnknown];
+        $mustOptIn = true;
+
+        if ($this->context->residenceDecides($record)) {
+            $residence = $record['residence'] ?? null;
+
+            if ($residence === null || ! $this->context->holds($residence['on']) || ($this->context->residenceOn !== null && $residence['on'] !== $this->context->residenceOn)) {
+                return [Reason::ResidenceUnknown];
+            }
+
+            $mustOptIn = $residence['country'] === $annex->forum ? $residents : $annex->optInAbroad;
         }
 
-        $mustOptIn = ($this->annex->optInAbroad && $this->annex->optInResidents)
-            || ($record['residence']['country'] === $this->annex->forum ? $this->annex->optInResidents : $this->annex->optInAbroad);
-
-        if (! $mustOptIn || ! $this->optInDue) {
+        if (! $mustOptIn || ! $this->context->optInDue($subgroup)) {
             return [];
         }
 
         return array_values(array_filter([
-            ! $this->optedIn($record['opt_in'] ?? null) ? Reason::NotOptedIn : null,
-            $this->annex->parallelDeclaration && ! ($record['parallel_declared'] ?? false) ? Reason::NoParallelDeclaration : null,
+            ! $this->optedIn($record['opt_in'] ?? null, $subgroup) ? Reason::NotOptedIn : null,
+            $annex->parallelDeclaration && ! ($record['parallel_declared'] ?? false) ? Reason::NoParallelDeclaration : null,
         ]));
     }
 
     /**
-     * @param  array{on: string, channel: string}|null  $optIn
+     * An opt-in counts when it was made on or before the reference date and falls inside a term that applies to the
+     * record, through the channel the court set for that term, or else the annex's. Under an annex without a window the
+     * law names the channel, and a term is a deadline alone. Without a term any day counts. The action it names is for Check and the auditor: a reference written another
+     * way is no reason to stop counting a person.
+     *
+     * @param  array{on: string, channel: string, action: string}|null  $optIn
      */
-    private function optedIn(?array $optIn): bool
+    private function optedIn(?array $optIn, ?string $subgroup): bool
     {
-        $channel = $this->window->channel ?? $this->annex->optInChannel;
+        if ($optIn === null || ! $this->context->holds($optIn['on'])) {
+            return false;
+        }
 
-        return $optIn !== null
-            && ($this->window->opensOn === null || $optIn['on'] >= $this->window->opensOn)
-            && ($this->window->closesOn === null || $optIn['on'] <= $this->window->closesOn)
-            && ($channel === null || $optIn['channel'] === $channel);
+        $terms = $this->context->termsFor($subgroup);
+
+        if ($terms === []) {
+            return in_array($this->context->annex->optInChannel, [null, $optIn['channel']], true);
+        }
+
+        foreach ($terms as $term) {
+            $channel = $this->context->annex->optInWindow ? ($term['channel'] ?? $this->context->annex->optInChannel) : $this->context->annex->optInChannel;
+
+            if ($optIn['on'] >= $term['opened_on']
+                && ($term['closed_on'] === null || $optIn['on'] <= $term['closed_on'])
+                && in_array($channel, [null, $optIn['channel']], true)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -130,17 +177,25 @@ final readonly class Grader
     }
 
     /**
-     * @param  array<string, mixed>  $membership
-     * @param  array<string, mixed>|null  $verified
+     * Section 4.4. A verification, a business-register check or an authority dated after the reference date does not
+     * count at it.
+     *
+     * @param  array<string, mixed>  $record
      * @return list<Reason>
      */
-    private function notCorroborated(array $membership, ?array $verified): array
+    private function notCorroborated(array $record): array
     {
+        $identity = $record['identity'];
+        $verified = $identity['verified'] !== null && $this->context->holds($identity['verified']['on']) ? $identity['verified'] : null;
+        $legal = $record['party'] === 'legal';
+
         return array_values(array_filter([
-            $membership['basis'] !== 'checked' ? Reason::NotChecked : null,
+            $record['membership']['basis'] !== 'checked' ? Reason::NotChecked : null,
             $verified === null ? Reason::IdentityNotVerified : null,
             $verified !== null && $verified['assurance'] === 'low' ? Reason::AssuranceTooLow : null,
-            $verified !== null && ! $this->annex->recognises($verified['scheme']) ? Reason::SchemeNotRecognised : null,
+            $verified !== null && ! $this->context->annex->recognises($verified['scheme']) ? Reason::SchemeNotRecognised : null,
+            $legal && ! $this->context->holds($identity['register_check']['on'] ?? null) ? Reason::RegisterNotChecked : null,
+            $legal && ! $this->context->holds($identity['authority']['on'] ?? null) ? Reason::AuthorityNotChecked : null,
         ]));
     }
 }

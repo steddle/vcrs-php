@@ -6,18 +6,22 @@ use InvalidArgumentException;
 use stdClass;
 
 /**
- * The canonical form of section 11.3: RFC 8785 for JSON without floating-point numbers,
- * which is keys sorted, no insignificant whitespace, UTF-8. And the snapshot of section 5.4:
- * the Merkle Tree of RFC 9162, section 2.1, over one line per record.
+ * The canonical form of section 11.3, RFC 8785, and the snapshot of section 5.4: the Merkle Tree of RFC 9162,
+ * section 2.1, over one line per record, and the manifest that binds the export's context to its root.
  */
 final class Canonical
 {
     public static function json(mixed $value): string
     {
-        return json_encode(
-            self::sorted($value),
-            JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_LINE_TERMINATORS | JSON_THROW_ON_ERROR,
-        );
+        return match (true) {
+            $value === null => 'null',
+            is_bool($value) => $value ? 'true' : 'false',
+            is_int($value), is_float($value) => self::number($value),
+            is_string($value) => json_encode($value, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_LINE_TERMINATORS | JSON_THROW_ON_ERROR),
+            is_array($value) && array_is_list($value) => '['.implode(',', array_map(self::json(...), $value)).']',
+            is_array($value), $value instanceof stdClass => self::object((array) $value),
+            default => throw new InvalidArgumentException('Only JSON values have a canonical form.'),
+        };
     }
 
     /**
@@ -29,6 +33,24 @@ final class Canonical
         unset($record->digest);
 
         return 'sha256:'.hash('sha256', self::json($record));
+    }
+
+    /**
+     * The manifest of section 5.4: the export without its anchor, its records replaced by their number and the
+     * snapshot root, so one digest commits to the records and to the context that grades them.
+     */
+    public static function manifest(stdClass $export, string $root): stdClass
+    {
+        $manifest = clone $export;
+        unset($manifest->anchor);
+        $manifest->records = (object) ['count' => count($export->records), 'root' => $root];
+
+        return $manifest;
+    }
+
+    public static function manifestDigest(stdClass $manifest): string
+    {
+        return 'sha256:'.hash('sha256', self::json($manifest));
     }
 
     /**
@@ -195,20 +217,60 @@ final class Canonical
         return 'sha256:'.bin2hex($hash);
     }
 
-    private static function sorted(mixed $value): mixed
+    /**
+     * @param  array<array-key, mixed>  $members
+     */
+    private static function object(array $members): string
     {
-        if ($value instanceof stdClass) {
-            $properties = get_object_vars($value);
-            uksort($properties, fn (string $a, string $b) => strcmp(self::utf16($a), self::utf16($b)));
+        uksort($members, fn (int|string $a, int|string $b) => strcmp(self::utf16((string) $a), self::utf16((string) $b)));
 
-            return (object) array_map(self::sorted(...), $properties);
+        $written = [];
+
+        foreach ($members as $name => $value) {
+            $written[] = self::json((string) $name).':'.self::json($value);
         }
 
-        if (is_array($value)) {
-            return array_map(self::sorted(...), $value);
+        return '{'.implode(',', $written).'}';
+    }
+
+    /**
+     * A number as RFC 8785, section 3.2.2.3, writes it: the shortest digits that read back as the same double, laid out
+     * as ECMAScript's Number.prototype.toString does.
+     */
+    private static function number(int|float $number): string
+    {
+        if (is_int($number) && abs($number) <= 2 ** 53) {
+            return (string) $number;
         }
 
-        return $value;
+        $number = (float) $number;
+
+        if (! is_finite($number)) {
+            throw new InvalidArgumentException('RFC 8785 has no form for NaN or an infinity.');
+        }
+
+        if ($number === 0.0) {
+            return '0';
+        }
+
+        $precision = ini_set('serialize_precision', '-1');
+        $shortest = var_export(abs($number), true);
+        ini_set('serialize_precision', (string) $precision);
+
+        preg_match('/^(\d+)\.(\d+)(?:E([+-]\d+))?$/', $shortest, $parts);
+        $digits = ltrim($parts[1].$parts[2], '0');
+        $point = strlen($parts[1]) + (int) ($parts[3] ?? 0) - (strlen($parts[1].$parts[2]) - strlen($digits));
+        $digits = rtrim($digits, '0');
+        $length = strlen($digits);
+
+        $written = match (true) {
+            $length <= $point && $point <= 21 => $digits.str_repeat('0', $point - $length),
+            $point > 0 && $point <= 21 => substr($digits, 0, $point).'.'.substr($digits, $point),
+            $point > -6 && $point <= 0 => '0.'.str_repeat('0', -$point).$digits,
+            default => ($length === 1 ? $digits : $digits[0].'.'.substr($digits, 1)).'e'.($point - 1 >= 0 ? '+' : '-').abs($point - 1),
+        };
+
+        return ($number < 0 ? '-' : '').$written;
     }
 
     /**

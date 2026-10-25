@@ -2,22 +2,46 @@
 
 namespace Steddle\Vcrs;
 
+use stdClass;
+
 final readonly class Report
 {
+    public Annex $annex;
+
     /**
      * @param  array<string, mixed>  $data
      * @param  array<string, Grading>  $gradings  per record id
      * @param  array<string, string>  $digests  per record id
-     * @param  array<string, list<string>>  $findings  per level condition
+     * @param  list<array{code: Finding, pointer: string, message: string}>  $findings
      */
     public function __construct(
         public array $data,
-        public Annex $annex,
+        public Context $context,
         public array $gradings,
         public array $digests,
         public string $root,
+        public stdClass $manifest,
+        public string $manifestDigest,
         public array $findings,
-    ) {}
+    ) {
+        $this->annex = $context->annex;
+    }
+
+    /**
+     * Whether the export can be read one way only (section 11.6).
+     */
+    public function consistent(): bool
+    {
+        return $this->with('consistent') === [];
+    }
+
+    /**
+     * Whether what the export states, its grades, digests, root and manifest, is what its facts give (section 11.6).
+     */
+    public function verified(): bool
+    {
+        return $this->with('verified') === [];
+    }
 
     /**
      * Active records per grade, and records not active.
@@ -38,7 +62,8 @@ final readonly class Report
     }
 
     /**
-     * Active records at or above each counted grade, as a percentage of each end of the denominator.
+     * Active records at or above each counted grade, as a percentage of each end of the denominator, rounded half up to
+     * four decimals (section 6.2).
      *
      * @return array<string, array{records: int, low: float, high: float}>
      */
@@ -92,7 +117,7 @@ final readonly class Report
      */
     public function crossSection(): array
     {
-        $records = array_column($this->data['records'], null, 'id');
+        $records = $this->records();
         $counted = array_filter($this->gradings, fn (Grading $grading) => $grading->grade->atLeast(Grade::C));
         $spread = [];
 
@@ -124,34 +149,34 @@ final readonly class Report
      */
     public function subgroups(): array
     {
-        $records = array_column($this->data['records'], null, 'id');
-        $spread = [];
-
-        foreach ($this->data['subgroups'] ?? [] as $subgroup) {
-            $spread[$subgroup] = ['A' => 0, 'B' => 0, 'C' => 0, 'D' => 0];
-        }
-
-        foreach ($this->gradings as $id => $grading) {
-            $subgroup = $records[$id]['subgroup'] ?? null;
-
-            if ($subgroup !== null && isset($spread[$subgroup]) && $records[$id]['status'] === 'active') {
-                $spread[$subgroup][$grading->grade->value]++;
-            }
-        }
-
-        return $spread;
+        return $this->spreadOver($this->data['subgroups'] ?? [], fn (array $record): array => [$record['subgroup'] ?? null]);
     }
 
     /**
-     * The highest level whose export conditions all hold, or null.
+     * Per part of a split claim, active records per grade: a record in both parts counts in each.
+     *
+     * @return array<string, array{A: int, B: int, C: int, D: int}>
+     */
+    public function parts(): array
+    {
+        return $this->spreadOver($this->data['parts'] ?? [], fn (array $record): array => $record['parts'] ?? []);
+    }
+
+    /**
+     * The highest level whose export conditions all hold, or null. An export that is not consistent, or does not
+     * verify, meets none.
      */
     public function level(): ?Level
     {
+        if (! $this->consistent() || ! $this->verified()) {
+            return null;
+        }
+
         $reached = null;
 
         foreach (Level::cases() as $level) {
-            foreach ($level->conditions() as $condition) {
-                if (($this->findings[$condition] ?? []) !== []) {
+            foreach ($this->findings as $finding) {
+                if (in_array($finding['code']->condition(), $level->conditions(), true)) {
                     return $reached;
                 }
             }
@@ -163,22 +188,24 @@ final readonly class Report
     }
 
     /**
-     * What stands between this register and the next level.
+     * What stands between this export and the next level: what keeps it from being consistent or from verifying, else
+     * the conditions of the next level it does not meet.
      *
-     * @return array<string, list<string>>
+     * @return list<array{code: Finding, pointer: string, message: string}>
      */
     public function blocking(): array
     {
+        if (! $this->consistent() || ! $this->verified()) {
+            return [...$this->with('consistent'), ...$this->with('verified')];
+        }
+
         $next = match ($this->level()) {
             null => Level::Registered,
             Level::Registered => Level::Identified,
             Level::Identified, Level::Verified => Level::Verified,
         };
 
-        return array_filter(
-            array_intersect_key($this->findings, array_flip($next->conditions())),
-            fn (array $findings) => $findings !== [],
-        );
+        return array_values(array_filter($this->findings, fn (array $finding): bool => in_array($finding['code']->condition(), $next->conditions(), true)));
     }
 
     /**
@@ -196,10 +223,61 @@ final readonly class Report
             'reasons' => $this->reasons(),
             'cross_section' => $this->crossSection(),
             'subgroups' => $this->subgroups(),
+            'parts' => $this->parts(),
             'snapshot_root' => $this->root,
+            'manifest' => $this->manifestDigest,
+            'consistent' => $this->consistent(),
+            'verified' => $this->verified(),
             'export_conditions_met' => $this->level()?->value,
-            'findings' => $this->findings,
+            'findings' => array_map(fn (array $finding): array => [...$finding, 'code' => $finding['code']->value], $this->findings),
             'grades' => array_map(fn (Grading $grading) => ['grade' => $grading->grade->value, 'reasons' => $grading->reasonCodes()], $this->gradings),
         ];
+    }
+
+    /**
+     * @return list<array{code: Finding, pointer: string, message: string}>
+     */
+    private function with(string $outcome): array
+    {
+        return array_values(array_filter($this->findings, fn (array $finding): bool => $finding['code']->outcome() === $outcome));
+    }
+
+    /**
+     * @return array<string, array<string, mixed>>
+     */
+    private function records(): array
+    {
+        $records = [];
+
+        foreach ($this->data['records'] as $record) {
+            $records[$record['id']] ??= $record;
+        }
+
+        return $records;
+    }
+
+    /**
+     * @param  list<string>  $groups
+     * @param  callable(array<string, mixed>): list<string|null>  $of
+     * @return array<string, array{A: int, B: int, C: int, D: int}>
+     */
+    private function spreadOver(array $groups, callable $of): array
+    {
+        $records = $this->records();
+        $spread = array_fill_keys($groups, ['A' => 0, 'B' => 0, 'C' => 0, 'D' => 0]);
+
+        foreach ($this->gradings as $id => $grading) {
+            if (in_array(Reason::NotActive, $grading->reasons, true)) {
+                continue;
+            }
+
+            foreach ($of($records[$id]) as $group) {
+                if ($group !== null && isset($spread[$group])) {
+                    $spread[$group][$grading->grade->value]++;
+                }
+            }
+        }
+
+        return $spread;
     }
 }

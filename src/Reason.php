@@ -27,4 +27,6 @@ enum Reason: string
     case IdentityNotVerified = 'identity_not_verified';
     case AssuranceTooLow = 'assurance_too_low';
     case SchemeNotRecognised = 'scheme_not_recognised';
+    case RegisterNotChecked = 'register_not_checked';
+    case AuthorityNotChecked = 'authority_not_checked';
 }

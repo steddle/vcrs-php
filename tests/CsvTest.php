@@ -14,14 +14,14 @@ function templateCsv(callable $change): string
 }
 
 it('reads the yes and no a Dutch spreadsheet writes', function () {
-    $csv = templateCsv(fn (string $text) => str_replace('r-0001,natural,active,2026-09-01,f1,t1,yes,yes,,yes,', 'r-0001,natural,active,2026-09-01,f1,t1,WAAR,WAAR,,WAAR,', $text));
+    $csv = templateCsv(fn (string $text) => str_replace('r-0001,natural,active,,2026-09-01,f1,t1,yes,yes,,yes,', 'r-0001,natural,active,,2026-09-01,f1,t1,WAAR,WAAR,,WAAR,', $text));
     $report = Check::run(Register::read(template('register.json'), $csv), Annex::load('nl'));
 
     expect($report->gradings['r-0001']->grade->value)->toBe('A');
 });
 
 it('refuses a yes or no it does not know', function () {
-    $csv = templateCsv(fn (string $text) => str_replace('r-0001,natural,active,2026-09-01,f1,t1,yes,', 'r-0001,natural,active,2026-09-01,f1,t1,x,', $text));
+    $csv = templateCsv(fn (string $text) => str_replace('r-0001,natural,active,,2026-09-01,f1,t1,yes,', 'r-0001,natural,active,,2026-09-01,f1,t1,x,', $text));
 
     Register::read(template('register.json'), $csv);
 })->throws(InvalidRegister::class, "/records/0: name holds 'x', which is neither yes nor no.");
@@ -30,7 +30,7 @@ it('reads a csv saved with a byte order mark', function () {
     $csv = templateCsv(fn (string $text) => "\u{FEFF}".$text);
 
     expect(Check::run(Register::read(template('register.json'), $csv), Annex::load('nl'))->root)
-        ->toBe('sha256:bd16f0dd9c9205fe559998e18a1424442e40f79e0d2f2696c5e9ce986da80cf2');
+        ->toBe(json_decode(file_get_contents(template('register.json')), true)['anchor']['root']);
 });
 
 it('refuses a csv separated by semicolons', function () {
