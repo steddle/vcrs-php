@@ -189,7 +189,7 @@ final class Check
 
             $this->duplicate($id, $record, $records, $pointer);
 
-            if (isset($record['dedupe_key']) && $record['status'] === 'active' && $record['duplicate_of'] === null) {
+            if (isset($record['dedupe_key']) && $this->context->active($record) && $record['duplicate_of'] === null) {
                 $keys[$record['dedupe_key']][] = $id;
             }
 
@@ -258,7 +258,7 @@ final class Check
         $used = ['flows' => [], 'terms' => []];
 
         foreach ($this->register->data['records'] as $record) {
-            if ($record['status'] === 'active') {
+            if ($this->context->active($record)) {
                 $used['flows'][$record['flow']] = true;
                 $used['terms'][$record['terms']] = true;
 

@@ -56,6 +56,16 @@ final readonly class Context
         return $date !== null && ($this->referenceDate === null || $date <= $this->referenceDate);
     }
 
+    /**
+     * Rule 1: a withdrawal, opt-out or exclusion dated after the reference date leaves the record active at it.
+     *
+     * @param  array<string, mixed>  $record
+     */
+    public function active(array $record): bool
+    {
+        return $record['status'] === 'active' || (isset($record['status_on']) && ! $this->holds($record['status_on']));
+    }
+
     public function informs(string $flow): bool
     {
         return $this->flows[$flow]['informs'] ?? false;

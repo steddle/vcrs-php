@@ -18,7 +18,7 @@ final readonly class Grader
         $membership = $record['membership'];
 
         $notCounted = array_values(array_filter([
-            $this->inactive($record) ? Reason::NotActive : null,
+            ! $this->context->active($record) ? Reason::NotActive : null,
             ! $this->informed($record) ? Reason::UninformedFlow : null,
             $record['duplicate_of'] !== null ? Reason::Duplicate : null,
             $membership['in_class'] === false ? Reason::OutsideClass : null,
@@ -45,16 +45,6 @@ final readonly class Grader
         }
 
         return new Grading(Grade::A);
-    }
-
-    /**
-     * Rule 1: a withdrawal, opt-out or exclusion dated after the reference date leaves the record active at it.
-     *
-     * @param  array<string, mixed>  $record
-     */
-    private function inactive(array $record): bool
-    {
-        return $record['status'] !== 'active' && (! isset($record['status_on']) || $this->context->holds($record['status_on']));
     }
 
     /**

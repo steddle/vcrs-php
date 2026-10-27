@@ -324,6 +324,24 @@ it('stays at identified without a witnessed flow', function () {
         ->and(array_map(fn (array $finding) => [$finding['code']->value, $finding['pointer']], $report->blocking()))->toBe([['flow_not_witnessed', '/flows/0/capture']]);
 });
 
+it('checks a record withdrawn after the reference date as the active record it was then', function (Closure $change, string $code) {
+    expect(codes(sealed($change)))->toContain($code);
+})->with([
+    'its deduplication key' => [function ($document) {
+        $document['records'][5]['duplicate_of'] = null;
+        unset($document['records'][5]['grade']);
+        $document['records'][3] = [...$document['records'][3], 'status' => 'withdrawn', 'status_on' => '2026-11-02'];
+
+        return $document;
+    }, 'unmarked_duplicates'],
+    'the flow it joined through' => [function ($document) {
+        $document['flows'][] = [...$document['flows'][0], 'id' => 'f2', 'capture' => null];
+        $document['records'][0] = [...$document['records'][0], 'flow' => 'f2', 'status' => 'withdrawn', 'status_on' => '2026-11-02'];
+
+        return $document;
+    }, 'flow_not_captured'],
+]);
+
 it('stays at registered without facets', function () {
     $report = sealed(function ($document) {
         unset($document['facets']);
