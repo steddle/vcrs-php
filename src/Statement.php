@@ -11,7 +11,7 @@ use InvalidArgumentException;
 final class Statement
 {
     /**
-     * @param  array{firm: string, standard: string, report_date: string}|null  $auditor
+     * @param  array{firm: string, standard: string, engagement: string, report_date: string}|null  $auditor
      */
     public static function draft(Report $report, ?Level $level = null, ?array $auditor = null, ?string $issuedOn = null): array
     {

@@ -31,7 +31,8 @@ const USAGE = 'VCRS '.Vcrs::VERSION.": check a claimant register against the Ver
       Print the export as one JSON document, its records read from the spreadsheet.
 
   vcrs statement <register.json> [--records=<records.csv>] [--level=registered|identified|verified]
-                 [--auditor-firm=<name> --auditor-standard=<standard> --auditor-date=<YYYY-MM-DD>] [--issued-on=<YYYY-MM-DD>]
+                 [--auditor-firm=<name> --auditor-standard=<standard>
+                  --auditor-engagement=agreed_upon_procedures|assurance --auditor-date=<YYYY-MM-DD>] [--issued-on=<YYYY-MM-DD>]
       Draft the conformance statement as JSON. Without the auditor it is a draft.
 
   vcrs manifest <register.json> [--records=<records.csv>] [--json]
@@ -249,7 +250,7 @@ function statement(Report $report, array $options): int
     }
 
     $auditor = isset($options['auditor-firm'])
-        ? ['firm' => $options['auditor-firm'], 'standard' => $options['auditor-standard'] ?? '', 'report_date' => $options['auditor-date'] ?? '']
+        ? ['firm' => $options['auditor-firm'], 'standard' => $options['auditor-standard'] ?? '', 'engagement' => $options['auditor-engagement'] ?? '', 'report_date' => $options['auditor-date'] ?? '']
         : null;
 
     $statement = Statement::draft(

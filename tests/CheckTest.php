@@ -389,7 +389,7 @@ it('drafts a conformance statement its schema accepts, a draft until the auditor
     $draft = Statement::draft(templateReport(), issuedOn: '2026-10-15');
     $statement = Statement::draft(
         templateReport(),
-        auditor: ['firm' => 'Voorbeeld Accountants', 'standard' => 'Standaard 4400N', 'report_date' => '2026-10-14'],
+        auditor: ['firm' => 'Voorbeeld Accountants', 'standard' => 'Standaard 4400N', 'engagement' => 'agreed_upon_procedures', 'report_date' => '2026-10-14'],
         issuedOn: '2026-10-15',
     );
 
@@ -398,6 +398,7 @@ it('drafts a conformance statement its schema accepts, a draft until the auditor
         ->and($statement['draft'])->toBeFalse()
         ->and($statement['level'])->toBe('verified')
         ->and($statement['auditor']['check'])->toBe('reproduction_test')
+        ->and($statement['auditor']['engagement'])->toBe('agreed_upon_procedures')
         ->and($statement['snapshot']['records'])->toBe(8)
         ->and($statement['snapshot']['manifest'])->toBe(templateReport()->manifestDigest);
 });
@@ -444,8 +445,8 @@ it('refuses a statement on an export that does not verify', function () {
 it('refuses a statement dated before what it rests on', function (array $auditor, string $issuedOn, string $message) {
     expect(fn () => Statement::draft(templateReport(), auditor: $auditor, issuedOn: $issuedOn))->toThrow(InvalidArgumentException::class, $message);
 })->with([
-    'a report before the reference date' => [['firm' => 'Voorbeeld Accountants', 'standard' => 'Standaard 4400N', 'report_date' => '2026-10-01'], '2026-10-15', 'before the reference date'],
-    'issued before the report' => [['firm' => 'Voorbeeld Accountants', 'standard' => 'Standaard 4400N', 'report_date' => '2026-10-14'], '2026-10-13', 'before the reference date or the auditor\'s report'],
+    'a report before the reference date' => [['firm' => 'Voorbeeld Accountants', 'standard' => 'Standaard 4400N', 'engagement' => 'agreed_upon_procedures', 'report_date' => '2026-10-01'], '2026-10-15', 'before the reference date'],
+    'issued before the report' => [['firm' => 'Voorbeeld Accountants', 'standard' => 'Standaard 4400N', 'engagement' => 'agreed_upon_procedures', 'report_date' => '2026-10-14'], '2026-10-13', 'before the reference date or the auditor\'s report'],
 ]);
 
 it('rejects an export that does not match the schema', function () {
