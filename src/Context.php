@@ -103,8 +103,8 @@ final readonly class Context
 
     /**
      * Whether rule 8's opt-in weighs on the grade (section 4.6): on a part only where it is the part the annex's
-     * opt-in governs, and on the record where it is in that part alone, or in it and another where the law leaves
-     * open whether the opt-in governs the other part too.
+     * opt-in governs, and on the record where it is in that part alone, or in any part where the law leaves open
+     * whether the opt-in governs the other parts too.
      *
      * @param  array<string, mixed>  $record
      */
@@ -118,8 +118,8 @@ final readonly class Context
             return $part === $this->annex->optInPart;
         }
 
-        return $this->inOptInPart($record)
-            && ($this->annex->optInPartUnsettled || array_diff($record['parts'] ?? [], [$this->annex->optInPart]) === []);
+        return $this->annex->optInPartUnsettled
+            || ($this->inOptInPart($record) && array_diff($record['parts'] ?? [], [$this->annex->optInPart]) === []);
     }
 
     /**
@@ -131,7 +131,7 @@ final readonly class Context
     public function residenceDecides(array $record): bool
     {
         return $this->annex->forum !== null
-            && $this->inOptInPart($record)
+            && ($this->annex->optInPartUnsettled || $this->inOptInPart($record))
             && ($this->annex->optInAbroad xor $this->residentsOptIn($record['subgroup'] ?? null));
     }
 

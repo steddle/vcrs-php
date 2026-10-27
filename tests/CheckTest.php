@@ -623,6 +623,31 @@ it('grades a record in both parts with the opt-in only where the law leaves open
     'outside the Directive' => [false, 'A'],
 ]);
 
+it('grades a record in the earlier part alone with the opt-in only where the law leaves open whether it governs that part', function (bool $directive, array $grades) {
+    $report = sealed(function (array $document) use ($directive) {
+        $document['action']['directive'] = $directive;
+        $document['parts'] = ['pre_wamca', 'wamca'];
+        $document['denominator']['parts'] = ['pre_wamca' => size(100, 200), 'wamca' => size(21000, 26000)];
+        $document['opt_in_terms'] = [['opened_on' => '2026-09-15', 'closed_on' => '2026-10-01', 'channel' => null]];
+
+        foreach ($document['records'] as $index => $record) {
+            $document['records'][$index]['parts'] = ['pre_wamca'];
+        }
+
+        $document['records'][0]['residence']['country'] = 'BE';
+        unset($document['records'][0]['grade'], $document['records'][4]['grade']);
+
+        return $document;
+    });
+
+    expect(array_map(fn (string $id): string => $report->gradings[$id]->grade->value, ['r-0001', 'r-0002', 'r-0005']))->toBe($grades)
+        ->and(codes($report))->toBe([])
+        ->and($report->parts()['pre_wamca'])->toBe(['A' => 1, 'B' => 2, 'C' => 2, 'D' => 2]);
+})->with([
+    'under the Directive, where Annex NL leaves it open' => [true, ['D', 'B', 'D']],
+    'outside the Directive' => [false, ['A', 'B', 'C']],
+]);
+
 it('measures coverage per subgroup and per part against a denominator of its own', function () {
     $report = sealed(function (array $document) {
         $document['subgroups'] = ['retail', 'lease'];
