@@ -42,6 +42,7 @@ enum Finding: string
     case FlowNotCaptured = 'flow_not_captured';
     case ResidenceUnsourced = 'residence_unsourced';
     case OptInNamesOtherAction = 'opt_in_names_other_action';
+    case PartWithoutDenominator = 'part_without_denominator';
     case FlowWithoutDigest = 'flow_without_digest';
     case TermsWithoutDigest = 'terms_without_digest';
     case RecordWithoutDigest = 'record_without_digest';
@@ -50,6 +51,7 @@ enum Finding: string
     case FlowNotWitnessed = 'flow_not_witnessed';
     case SubgroupsUndeclared = 'subgroups_undeclared';
     case SubgroupUndeclared = 'subgroup_undeclared';
+    case SubgroupWithoutDenominator = 'subgroup_without_denominator';
 
     /**
      * consistent: the export can be read one way only. verified: what it states, it computes. A condition: one of the
@@ -71,12 +73,13 @@ enum Finding: string
             self::FlowNotCaptured => 'flows_captured',
             self::ResidenceUnsourced => 'residence_sourced',
             self::OptInNamesOtherAction => 'opt_ins_named',
+            self::PartWithoutDenominator => 'parts_sized',
             self::FlowWithoutDigest => 'flow_digests',
             self::TermsWithoutDigest => 'terms_digests',
             self::RecordWithoutDigest => 'record_digests',
             self::NoFacets, self::FacetValueUndeclared => 'cross_section',
             self::FlowNotWitnessed => 'flows_witnessed',
-            self::SubgroupsUndeclared, self::SubgroupUndeclared => 'subgroups',
+            self::SubgroupsUndeclared, self::SubgroupUndeclared, self::SubgroupWithoutDenominator => 'subgroups',
             default => null,
         };
     }

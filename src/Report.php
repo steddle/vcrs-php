@@ -71,8 +71,36 @@ final readonly class Report
      */
     public function coverage(): array
     {
-        $counts = $this->counts();
-        $denominator = $this->data['denominator'];
+        return $this->share($this->counts(), $this->data['denominator']);
+    }
+
+    /**
+     * Coverage as section 6.2 measures it, per subgroup and per part of a split claim the denominator sizes
+     * (sections 4.6 and 6.4).
+     *
+     * @return array{subgroups: array<string, array<string, array{records: int, low: float, high: float}>>, parts: array<string, array<string, array{records: int, low: float, high: float}>>}
+     */
+    public function groupCoverage(): array
+    {
+        $spread = ['subgroups' => $this->subgroups(), 'parts' => $this->parts()];
+        $coverage = ['subgroups' => [], 'parts' => []];
+
+        foreach ($spread as $kind => $counts) {
+            foreach ($this->data['denominator'][$kind] ?? [] as $group => $size) {
+                $coverage[$kind][$group] = $this->share($counts[$group] ?? ['A' => 0, 'B' => 0, 'C' => 0, 'D' => 0], $size);
+            }
+        }
+
+        return $coverage;
+    }
+
+    /**
+     * @param  array<string, int>  $counts  per grade
+     * @param  array{low: int, high: int}  $size
+     * @return array<string, array{records: int, low: float, high: float}>
+     */
+    private function share(array $counts, array $size): array
+    {
         $coverage = [];
         $running = 0;
 
@@ -80,8 +108,8 @@ final readonly class Report
             $running += $counts[$grade->value];
             $coverage[$grade->value] = [
                 'records' => $running,
-                'low' => round($running / $denominator['high'] * 100, 4),
-                'high' => round($running / $denominator['low'] * 100, 4),
+                'low' => round($running / $size['high'] * 100, 4),
+                'high' => round($running / $size['low'] * 100, 4),
             ];
         }
 
@@ -237,6 +265,7 @@ final readonly class Report
             'cross_section' => $this->crossSection(),
             'subgroups' => $this->subgroups(),
             'parts' => $this->parts(),
+            'group_coverage' => $this->groupCoverage(),
             'snapshot_root' => $this->root,
             'manifest' => $this->manifestDigest,
             'consistent' => $this->consistent(),

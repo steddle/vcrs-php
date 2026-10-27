@@ -18,7 +18,7 @@ enum Level: string
     public function conditions(): array
     {
         return match ($this) {
-            self::Registered => ['flows_captured', 'snapshot_anchored', 'residence_sourced', 'opt_ins_named'],
+            self::Registered => ['flows_captured', 'snapshot_anchored', 'residence_sourced', 'opt_ins_named', 'parts_sized'],
             self::Identified => [...self::Registered->conditions(), 'flow_digests', 'terms_digests', 'record_digests', 'cross_section'],
             self::Verified => [...self::Identified->conditions(), 'flows_witnessed', 'subgroups'],
         };

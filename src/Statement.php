@@ -62,6 +62,8 @@ final class Statement
             'counts' => $report->counts(),
             'coverage' => $report->coverage(),
             'membership_not_established' => $report->reasons()['C'][Reason::ClassNotEstablished->value] ?? 0,
+            ...self::groups($report, 'subgroups'),
+            ...self::groups($report, 'parts'),
             'snapshot' => [
                 'root' => $report->root,
                 'manifest' => $report->manifestDigest,
@@ -79,5 +81,31 @@ final class Statement
         }
 
         return $statement;
+    }
+
+    /**
+     * Per subgroup or part the denominator sizes, its size and coverage, or nothing where it sizes none.
+     *
+     * @param  'subgroups'|'parts'  $kind
+     * @return array<string, array<string, array{denominator: array<string, mixed>, coverage: array<string, mixed>}>>
+     */
+    private static function groups(Report $report, string $kind): array
+    {
+        $coverage = $report->groupCoverage()[$kind];
+
+        if ($coverage === []) {
+            return [];
+        }
+
+        $groups = [];
+
+        foreach ($coverage as $group => $shares) {
+            $groups[$group] = [
+                'denominator' => array_intersect_key($report->data['denominator'][$kind][$group], array_flip(['low', 'high', 'source', 'as_of'])),
+                'coverage' => $shares,
+            ];
+        }
+
+        return [$kind => $groups];
     }
 }

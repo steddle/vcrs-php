@@ -141,6 +141,18 @@ final class Check
             $this->find(Finding::DenominatorInverted, '/denominator', "The denominator's low end is above its high end.");
         }
 
+        foreach (['subgroups' => [$subgroups, Finding::UnknownSubgroup], 'parts' => [$data['parts'] ?? [], Finding::UnknownPart]] as $kind => [$declared, $unknown]) {
+            foreach ($data['denominator'][$kind] ?? [] as $name => $size) {
+                if (! in_array((string) $name, $declared, true)) {
+                    $this->find($unknown, "/denominator/{$kind}/{$name}", "The denominator sizes {$name}, which the export does not declare among its {$kind}.");
+                }
+
+                if ($size['low'] > $size['high']) {
+                    $this->find(Finding::DenominatorInverted, "/denominator/{$kind}/{$name}", "The denominator's low end for {$name} is above its high end.");
+                }
+            }
+        }
+
         if (isset($data['claims']) && $data['claims']['low'] > $data['claims']['high']) {
             $this->find(Finding::ClaimsInverted, '/claims', "The represented claims' low end is above their high end.");
         }
@@ -326,7 +338,8 @@ final class Check
     }
 
     /**
-     * Section 6.3 and 6.4, over the records at grade C or better.
+     * Section 4.6, 6.3 and 6.4: a size for every part and subgroup, and the facets and subgroups of the records at grade
+     * C or better.
      *
      * @param  array<string, Grading>  $gradings
      */
@@ -342,6 +355,18 @@ final class Check
 
         if ($subgroups === null) {
             $this->find(Finding::SubgroupsUndeclared, '/subgroups', 'The register does not declare its subgroups, or that it has none.');
+        }
+
+        foreach ($subgroups ?? [] as $subgroup) {
+            if (! isset($data['denominator']['subgroups'][$subgroup])) {
+                $this->find(Finding::SubgroupWithoutDenominator, '/denominator/subgroups', "Subgroup {$subgroup} has no denominator of its own.");
+            }
+        }
+
+        foreach ($data['parts'] ?? [] as $part) {
+            if (! isset($data['denominator']['parts'][$part])) {
+                $this->find(Finding::PartWithoutDenominator, '/denominator/parts', "Part {$part} of the claim has no denominator of its own.");
+            }
         }
 
         foreach ($data['records'] as $index => $record) {

@@ -74,6 +74,14 @@ function codes(Report $report): array
     return array_map(fn (array $finding): string => $finding['code']->value, $report->findings);
 }
 
+/**
+ * @return array{low: int, high: int, source: string, method: string, as_of: string}
+ */
+function size(int $low, int $high): array
+{
+    return ['low' => $low, 'high' => $high, 'source' => 'RDW open data', 'method' => 'Registrations of the models concerned', 'as_of' => '2026-09-01'];
+}
+
 it('checks the template register at level verified', function () {
     $report = templateReport();
 
@@ -249,6 +257,21 @@ it('finds an export that cannot be read one way, and meets no level', function (
 
         return $document;
     }, 'unknown_part'],
+    'a denominator for a subgroup the export does not declare' => [function ($document) {
+        $document['denominator']['subgroups'] = ['retail' => size(10, 20)];
+
+        return $document;
+    }, 'unknown_subgroup'],
+    'a part\'s denominator inverted' => [function ($document) {
+        $document['parts'] = ['pre_wamca', 'wamca'];
+        $document['denominator']['parts'] = ['pre_wamca' => size(200, 100), 'wamca' => size(21000, 26000)];
+
+        foreach ($document['records'] as $index => $record) {
+            $document['records'][$index]['parts'] = ['wamca'];
+        }
+
+        return $document;
+    }, 'denominator_inverted'],
     'an anchor dated before the reference date' => [function ($document) {
         $document['anchor']['on'] = '2026-10-01';
 
@@ -574,6 +597,7 @@ it('counts per part of a split claim, a record in both parts in each', function 
 it('counts a record in both parts at the grade each part gives it, the opt-in in its own part alone', function () {
     $report = sealed(function (array $document) {
         $document['parts'] = ['pre_wamca', 'wamca'];
+        $document['denominator']['parts'] = ['pre_wamca' => size(100, 200), 'wamca' => size(21000, 26000)];
         $document['opt_in_terms'] = [['opened_on' => '2026-09-15', 'closed_on' => '2026-10-01', 'channel' => null]];
 
         foreach ($document['records'] as $index => $record) {
@@ -593,6 +617,72 @@ it('counts a record in both parts at the grade each part gives it, the opt-in in
             'pre_wamca' => ['A' => 1, 'B' => 0, 'C' => 0, 'D' => 0],
             'wamca' => ['A' => 0, 'B' => 2, 'C' => 1, 'D' => 4],
         ]);
+});
+
+it('measures coverage per subgroup and per part against a denominator of its own', function () {
+    $report = sealed(function (array $document) {
+        $document['subgroups'] = ['retail', 'lease'];
+        $document['parts'] = ['pre_wamca', 'wamca'];
+        $document['denominator']['subgroups'] = ['retail' => size(10, 20), 'lease' => size(1000, 1000)];
+        $document['denominator']['parts'] = ['pre_wamca' => size(100, 200), 'wamca' => size(21000, 26000)];
+
+        foreach ($document['records'] as $index => $record) {
+            $document['records'][$index]['subgroup'] = $index === 0 ? 'retail' : 'lease';
+            $document['records'][$index]['parts'] = $index === 0 ? ['pre_wamca', 'wamca'] : ['wamca'];
+        }
+
+        return $document;
+    });
+
+    expect(codes($report))->toBe([])
+        ->and($report->groupCoverage())->toBe([
+            'subgroups' => [
+                'retail' => ['A' => ['records' => 1, 'low' => 5.0, 'high' => 10.0], 'B' => ['records' => 1, 'low' => 5.0, 'high' => 10.0], 'C' => ['records' => 1, 'low' => 5.0, 'high' => 10.0]],
+                'lease' => ['A' => ['records' => 0, 'low' => 0.0, 'high' => 0.0], 'B' => ['records' => 2, 'low' => 0.2, 'high' => 0.2], 'C' => ['records' => 4, 'low' => 0.4, 'high' => 0.4]],
+            ],
+            'parts' => [
+                'pre_wamca' => ['A' => ['records' => 1, 'low' => 0.5, 'high' => 1.0], 'B' => ['records' => 1, 'low' => 0.5, 'high' => 1.0], 'C' => ['records' => 1, 'low' => 0.5, 'high' => 1.0]],
+                'wamca' => ['A' => ['records' => 1, 'low' => 0.0038, 'high' => 0.0048], 'B' => ['records' => 3, 'low' => 0.0115, 'high' => 0.0143], 'C' => ['records' => 5, 'low' => 0.0192, 'high' => 0.0238]],
+            ],
+        ])
+        ->and(Statement::draft($report, issuedOn: '2026-10-15')['subgroups']['retail'])->toBe([
+            'denominator' => ['low' => 10, 'high' => 20, 'source' => 'RDW open data', 'as_of' => '2026-09-01'],
+            'coverage' => $report->groupCoverage()['subgroups']['retail'],
+        ])
+        ->and(Statement::draft($report, issuedOn: '2026-10-15')['parts'])->toHaveKeys(['pre_wamca', 'wamca'])
+        ->and(Statement::draft(templateReport(), issuedOn: '2026-10-15'))->not->toHaveKeys(['subgroups', 'parts']);
+});
+
+it('withholds every level from a split claim without the size of each part', function () {
+    $report = sealed(function (array $document) {
+        $document['parts'] = ['pre_wamca', 'wamca'];
+        $document['denominator']['parts'] = ['wamca' => size(21000, 26000)];
+
+        foreach ($document['records'] as $index => $record) {
+            $document['records'][$index]['parts'] = ['wamca'];
+        }
+
+        return $document;
+    });
+
+    expect(codes($report))->toBe(['part_without_denominator'])
+        ->and($report->level())->toBeNull();
+});
+
+it('stays at identified without the size of each subgroup', function () {
+    $report = sealed(function (array $document) {
+        $document['subgroups'] = ['retail', 'lease'];
+        $document['denominator']['subgroups'] = ['retail' => size(10, 20)];
+
+        foreach ($document['records'] as $index => $record) {
+            $document['records'][$index]['subgroup'] = $index === 0 ? 'retail' : 'lease';
+        }
+
+        return $document;
+    });
+
+    expect(codes($report))->toBe(['subgroup_without_denominator'])
+        ->and($report->level())->toBe(Level::Identified);
 });
 
 it('rejects an anchor that does not name its root or its manifest', function (string $member) {
