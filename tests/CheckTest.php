@@ -403,6 +403,18 @@ it('drafts a conformance statement its schema accepts, a draft until the auditor
         ->and($statement['snapshot']['manifest'])->toBe(templateReport()->manifestDigest);
 });
 
+it('counts in the statement the records at grade C whose evidence does not establish membership', function () {
+    $report = sealed(function ($document) {
+        $document['records'][1]['membership']['in_class'] = null;
+        unset($document['records'][1]['grade']);
+
+        return $document;
+    });
+
+    expect(Statement::draft($report, issuedOn: '2026-10-15')['membership_not_established'])->toBe(1)
+        ->and(Statement::draft(templateReport(), issuedOn: '2026-10-15')['membership_not_established'])->toBe(0);
+});
+
 it('fills in the example statement with the statement drafted for the example register', function () {
     $markdown = file_get_contents(template('conformance-statement-example.md'));
     preg_match('/```json\n(.*?)```/s', $markdown, $json);

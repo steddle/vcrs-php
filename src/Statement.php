@@ -61,6 +61,7 @@ final class Statement
             ...(isset($data['claims']) ? ['claims' => $data['claims']] : []),
             'counts' => $report->counts(),
             'coverage' => $report->coverage(),
+            'membership_not_established' => $report->reasons()['C'][Reason::ClassNotEstablished->value] ?? 0,
             'snapshot' => [
                 'root' => $report->root,
                 'manifest' => $report->manifestDigest,
