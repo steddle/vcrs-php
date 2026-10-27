@@ -13,6 +13,7 @@ final readonly class Annex
      * @param  bool|'directive'  $parallelDeclaration  whether every opt-in must also declare that the person is not represented elsewhere on the same claim, or 'directive' where only in an action under the Directive
      * @param  list<string>  $schemes  identification schemes, beside eidas, that count as recognised for grade A
      * @param  string|null  $optInPart  where a claim falls under two laws, the part whose law the annex's opt-in rules state
+     * @param  bool|'directive'  $optInPartUnsettled  whether the law leaves open that the opt-in also governs the claim's other parts, or 'directive' where only in an action under the Directive
      */
     public function __construct(
         public string $code,
@@ -25,6 +26,7 @@ final readonly class Annex
         public bool|string $parallelDeclaration,
         public array $schemes,
         public ?string $optInPart = null,
+        public bool|string $optInPartUnsettled = false,
     ) {}
 
     /**
@@ -51,6 +53,7 @@ final readonly class Annex
             $this->parallelDeclaration === 'directive' ? $directive : $this->parallelDeclaration,
             $this->schemes,
             $this->optInPart,
+            $this->optInPartUnsettled === 'directive' ? $directive : $this->optInPartUnsettled,
         );
     }
 
@@ -78,6 +81,7 @@ final readonly class Annex
             $annex['parallel_declaration'],
             $annex['schemes'],
             $annex['opt_in_part'] ?? null,
+            $annex['opt_in_part_unsettled'] ?? false,
         );
     }
 

@@ -594,8 +594,9 @@ it('counts per part of a split claim, a record in both parts in each', function 
     ]);
 });
 
-it('grades a record in both parts with the opt-in, and counts it in the other part without', function () {
-    $report = sealed(function (array $document) {
+it('grades a record in both parts with the opt-in only where the law leaves open whether it governs the other part', function (bool $directive, string $grade) {
+    $report = sealed(function (array $document) use ($directive) {
+        $document['action']['directive'] = $directive;
         $document['parts'] = ['pre_wamca', 'wamca'];
         $document['denominator']['parts'] = ['pre_wamca' => size(100, 200), 'wamca' => size(21000, 26000)];
         $document['opt_in_terms'] = [['opened_on' => '2026-09-15', 'closed_on' => '2026-10-01', 'channel' => null]];
@@ -610,14 +611,17 @@ it('grades a record in both parts with the opt-in, and counts it in the other pa
         return $document;
     });
 
-    expect($report->gradings['r-0001']->grade->value)->toBe('D')
+    expect($report->gradings['r-0001']->grade->value)->toBe($grade)
         ->and($report->gradings['r-0005']->grade->value)->toBe('D')
         ->and(codes($report))->toBe([])
         ->and($report->parts())->toBe([
             'pre_wamca' => ['A' => 1, 'B' => 0, 'C' => 0, 'D' => 0],
             'wamca' => ['A' => 0, 'B' => 2, 'C' => 1, 'D' => 4],
         ]);
-});
+})->with([
+    'under the Directive, where Annex NL leaves it open' => [true, 'D'],
+    'outside the Directive' => [false, 'A'],
+]);
 
 it('measures coverage per subgroup and per part against a denominator of its own', function () {
     $report = sealed(function (array $document) {
