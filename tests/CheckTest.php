@@ -594,7 +594,7 @@ it('counts per part of a split claim, a record in both parts in each', function 
     ]);
 });
 
-it('counts a record in both parts at the grade each part gives it, the opt-in in its own part alone', function () {
+it('grades a record in both parts with the opt-in, and counts it in the other part without', function () {
     $report = sealed(function (array $document) {
         $document['parts'] = ['pre_wamca', 'wamca'];
         $document['denominator']['parts'] = ['pre_wamca' => size(100, 200), 'wamca' => size(21000, 26000)];
@@ -605,12 +605,12 @@ it('counts a record in both parts at the grade each part gives it, the opt-in in
         }
 
         $document['records'][0]['residence']['country'] = 'BE';
-        unset($document['records'][4]['grade']);
+        unset($document['records'][0]['grade'], $document['records'][4]['grade']);
 
         return $document;
     });
 
-    expect($report->gradings['r-0001']->grade->value)->toBe('A')
+    expect($report->gradings['r-0001']->grade->value)->toBe('D')
         ->and($report->gradings['r-0005']->grade->value)->toBe('D')
         ->and(codes($report))->toBe([])
         ->and($report->parts())->toBe([

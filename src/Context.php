@@ -102,18 +102,18 @@ final readonly class Context
     }
 
     /**
-     * Whether rule 8's opt-in weighs on the grade: in the part the annex's opt-in governs, and for the record as a
-     * whole only where it belongs to that part alone (section 4.6).
+     * Whether rule 8's opt-in weighs on the grade: on the record wherever it is in the part the annex's opt-in
+     * governs, and on a part only where it is that part (section 4.6).
      *
      * @param  array<string, mixed>  $record
      */
     public function optInGrades(array $record, ?string $part): bool
     {
-        if ($this->annex->optInPart === null || $this->parts === null) {
-            return true;
+        if ($part === null || $this->annex->optInPart === null || $this->parts === null) {
+            return $this->inOptInPart($record);
         }
 
-        return $part === null ? ($record['parts'] ?? []) === [$this->annex->optInPart] : $part === $this->annex->optInPart;
+        return $part === $this->annex->optInPart;
     }
 
     /**
