@@ -38,7 +38,7 @@ final class Check
 
             $gradings[$id] = $grader->grade($record);
 
-            foreach ($check->context->parts === null ? [] : $record['parts'] ?? [] as $part) {
+            foreach ($check->context->parts === null ? [] : ($record['parts'] ?? []) as $part) {
                 $partGradings[$id][$part] = $grader->grade($record, $part);
             }
             $digests[$id] = Canonical::digest($raw);

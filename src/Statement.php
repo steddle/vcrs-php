@@ -87,7 +87,7 @@ final class Statement
      * Per subgroup or part the denominator sizes, its size and coverage, or nothing where it sizes none.
      *
      * @param  'subgroups'|'parts'  $kind
-     * @return array<string, array<string, array{denominator: array<string, mixed>, coverage: array<string, mixed>}>>
+     * @return array<string, object>
      */
     private static function groups(Report $report, string $kind): array
     {
@@ -106,6 +106,6 @@ final class Statement
             ];
         }
 
-        return [$kind => $groups];
+        return [$kind => (object) $groups];
     }
 }

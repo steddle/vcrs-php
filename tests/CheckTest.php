@@ -645,12 +645,29 @@ it('measures coverage per subgroup and per part against a denominator of its own
                 'wamca' => ['A' => ['records' => 1, 'low' => 0.0038, 'high' => 0.0048], 'B' => ['records' => 3, 'low' => 0.0115, 'high' => 0.0143], 'C' => ['records' => 5, 'low' => 0.0192, 'high' => 0.0238]],
             ],
         ])
-        ->and(Statement::draft($report, issuedOn: '2026-10-15')['subgroups']['retail'])->toBe([
+        ->and(Statement::draft($report, issuedOn: '2026-10-15')['subgroups']->retail)->toBe([
             'denominator' => ['low' => 10, 'high' => 20, 'source' => 'RDW open data', 'as_of' => '2026-09-01'],
             'coverage' => $report->groupCoverage()['subgroups']['retail'],
         ])
-        ->and(Statement::draft($report, issuedOn: '2026-10-15')['parts'])->toHaveKeys(['pre_wamca', 'wamca'])
+        ->and((array) Statement::draft($report, issuedOn: '2026-10-15')['parts'])->toHaveKeys(['pre_wamca', 'wamca'])
         ->and(Statement::draft(templateReport(), issuedOn: '2026-10-15'))->not->toHaveKeys(['subgroups', 'parts']);
+});
+
+it('keeps group names as object keys in the statement and the report, numeric names too', function () {
+    $report = sealed(function (array $document) {
+        $document['subgroups'] = ['0', '1'];
+        $document['denominator']['subgroups'] = (object) ['0' => size(10, 20), '1' => size(1000, 1000)];
+
+        foreach ($document['records'] as $index => $record) {
+            $document['records'][$index]['subgroup'] = $index === 0 ? '0' : '1';
+        }
+
+        return $document;
+    });
+
+    expect(json_encode(Statement::draft($report, issuedOn: '2026-10-15')['subgroups']))->toStartWith('{"0":')
+        ->and(json_encode($report->toArray()['subgroups']))->toStartWith('{"0":')
+        ->and(json_encode($report->toArray()['group_coverage']['subgroups']))->toStartWith('{"0":');
 });
 
 it('withholds every level from a split claim without the size of each part', function () {
@@ -759,7 +776,7 @@ it('reports the whole check as an array', function () {
         ->and($report['consistent'])->toBeTrue()
         ->and($report['verified'])->toBeTrue()
         ->and($report['manifest'])->toStartWith('sha256:')
-        ->and($report['subgroups'])->toBe([])
+        ->and((array) $report['subgroups'])->toBe([])
         ->and($report['grades']['r-0001'])->toBe(['grade' => 'A', 'reasons' => []]);
 });
 
