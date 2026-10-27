@@ -6,7 +6,7 @@ use Composer\InstalledVersions;
 
 final class Vcrs
 {
-    public const VERSION = '0.1.0-beta.4';
+    public const VERSION = '0.1.0-beta.5';
 
     /**
      * Installed as a package, the standard's folder is where Composer put `steddle/vcrs`, which is not beside this
