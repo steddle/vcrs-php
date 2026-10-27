@@ -571,6 +571,30 @@ it('counts per part of a split claim, a record in both parts in each', function 
     ]);
 });
 
+it('counts a record in both parts at the grade each part gives it, the opt-in in its own part alone', function () {
+    $report = sealed(function (array $document) {
+        $document['parts'] = ['pre_wamca', 'wamca'];
+        $document['opt_in_terms'] = [['opened_on' => '2026-09-15', 'closed_on' => '2026-10-01', 'channel' => null]];
+
+        foreach ($document['records'] as $index => $record) {
+            $document['records'][$index]['parts'] = $index === 0 ? ['pre_wamca', 'wamca'] : ['wamca'];
+        }
+
+        $document['records'][0]['residence']['country'] = 'BE';
+        unset($document['records'][4]['grade']);
+
+        return $document;
+    });
+
+    expect($report->gradings['r-0001']->grade->value)->toBe('A')
+        ->and($report->gradings['r-0005']->grade->value)->toBe('D')
+        ->and(codes($report))->toBe([])
+        ->and($report->parts())->toBe([
+            'pre_wamca' => ['A' => 1, 'B' => 0, 'C' => 0, 'D' => 0],
+            'wamca' => ['A' => 0, 'B' => 2, 'C' => 1, 'D' => 4],
+        ]);
+});
+
 it('rejects an anchor that does not name its root or its manifest', function (string $member) {
     templateReport(function (array $document) use ($member) {
         unset($document['anchor'][$member]);

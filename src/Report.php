@@ -11,6 +11,7 @@ final readonly class Report
     /**
      * @param  array<string, mixed>  $data
      * @param  array<string, Grading>  $gradings  per record id
+     * @param  array<string, array<string, Grading>>  $partGradings  per record id, per part of a split claim it belongs to
      * @param  array<string, string>  $digests  per record id
      * @param  list<array{code: Finding, pointer: string, message: string}>  $findings
      */
@@ -18,6 +19,7 @@ final readonly class Report
         public array $data,
         public Context $context,
         public array $gradings,
+        public array $partGradings,
         public array $digests,
         public string $root,
         public stdClass $manifest,
@@ -153,13 +155,24 @@ final readonly class Report
     }
 
     /**
-     * Per part of a split claim, active records per grade: a record in both parts counts in each.
+     * Per part of a split claim, active records per grade: a record in both parts counts in each, at the grade it
+     * holds in that part (section 4.6).
      *
      * @return array<string, array{A: int, B: int, C: int, D: int}>
      */
     public function parts(): array
     {
-        return $this->spreadOver($this->data['parts'] ?? [], fn (array $record): array => $record['parts'] ?? []);
+        $spread = array_fill_keys($this->data['parts'] ?? [], ['A' => 0, 'B' => 0, 'C' => 0, 'D' => 0]);
+
+        foreach ($this->partGradings as $gradings) {
+            foreach ($gradings as $part => $grading) {
+                if (isset($spread[$part]) && ! in_array(Reason::NotActive, $grading->reasons, true)) {
+                    $spread[$part][$grading->grade->value]++;
+                }
+            }
+        }
+
+        return $spread;
     }
 
     /**

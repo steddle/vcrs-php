@@ -10,9 +10,11 @@ final readonly class Grader
     public function __construct(private Context $context) {}
 
     /**
+     * The record's grade, or with `$part` its grade in that part of a split claim (section 4.6).
+     *
      * @param  array<string, mixed>  $record
      */
-    public function grade(array $record): Grading
+    public function grade(array $record, ?string $part = null): Grading
     {
         $identity = $record['identity'];
         $membership = $record['membership'];
@@ -25,7 +27,7 @@ final readonly class Grader
             ! $identity['name'] ? Reason::NoName : null,
             ! $this->distinct($record['party'], $identity) ? Reason::NotDistinct : null,
             ! $identity['contact_confirmed'] ? Reason::UnconfirmedContact : null,
-            ...$this->optIn($record),
+            ...$this->optIn($record, $part),
         ]));
 
         if ($notCounted !== []) {
@@ -72,13 +74,13 @@ final readonly class Grader
      * @param  array<string, mixed>  $record
      * @return list<Reason>
      */
-    private function optIn(array $record): array
+    private function optIn(array $record, ?string $part): array
     {
         $annex = $this->context->annex;
         $subgroup = $record['subgroup'] ?? null;
         $residents = $this->context->residentsOptIn($subgroup);
 
-        if ($annex->forum === null || (! $annex->optInAbroad && ! $residents) || ! $this->context->inOptInPart($record)) {
+        if ($annex->forum === null || (! $annex->optInAbroad && ! $residents) || ! $this->context->optInGrades($record, $part)) {
             return [];
         }
 

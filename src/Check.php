@@ -23,6 +23,7 @@ final class Check
         $check = new self($register, Context::ofExport($register->data, $annex));
         $grader = new Grader($check->context);
         $gradings = [];
+        $partGradings = [];
         $digests = [];
 
         foreach ($register->records as $index => $raw) {
@@ -36,6 +37,10 @@ final class Check
             }
 
             $gradings[$id] = $grader->grade($record);
+
+            foreach ($check->context->parts === null ? [] : $record['parts'] ?? [] as $part) {
+                $partGradings[$id][$part] = $grader->grade($record, $part);
+            }
             $digests[$id] = Canonical::digest($raw);
 
             if (isset($record['grade']) && $record['grade'] !== $gradings[$id]->grade->value) {
@@ -59,7 +64,7 @@ final class Check
         $check->anchor($root, $manifestDigest);
         $check->spread($gradings);
 
-        return new Report($register->data, $check->context, $gradings, $digests, $root, $manifest, $manifestDigest, $check->findings);
+        return new Report($register->data, $check->context, $gradings, $partGradings, $digests, $root, $manifest, $manifestDigest, $check->findings);
     }
 
     private function find(Finding $code, string $pointer, string $message): void

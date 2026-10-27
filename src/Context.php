@@ -102,6 +102,21 @@ final readonly class Context
     }
 
     /**
+     * Whether rule 8's opt-in weighs on the grade: in the part the annex's opt-in governs, and for the record as a
+     * whole only where it belongs to that part alone (section 4.6).
+     *
+     * @param  array<string, mixed>  $record
+     */
+    public function optInGrades(array $record, ?string $part): bool
+    {
+        if ($this->annex->optInPart === null || $this->parts === null) {
+            return true;
+        }
+
+        return $part === null ? ($record['parts'] ?? []) === [$this->annex->optInPart] : $part === $this->annex->optInPart;
+    }
+
+    /**
      * Whether the record's residence decides whether the person opts in: the annex binds one of people abroad and
      * residents on an opt-in, not both.
      *

@@ -11,7 +11,7 @@ it('grades every vector as it states', function (string $path) {
     $context = $vector['context'] ?? [];
     $annex = $vector['annex'] === null ? Annex::core() : Annex::load($vector['annex']);
 
-    $grading = (new Grader(new Context(
+    $grader = new Grader(new Context(
         $annex->forAction($context['directive'] ?? false),
         $context['reference_date'] ?? null,
         $vector['flows'],
@@ -20,10 +20,17 @@ it('grades every vector as it states', function (string $path) {
         $context['residence_on'] ?? null,
         $context['parts'] ?? null,
         $context['court_reference'] ?? null,
-    )))->grade($vector['record']);
+    ));
+    $grading = $grader->grade($vector['record']);
 
     expect($grading->grade->value)->toBe($vector['expected']['grade'])
         ->and($grading->reasonCodes())->toBe($vector['expected']['reasons']);
+
+    foreach ($vector['expected']['parts'] ?? [] as $part => $expected) {
+        $inPart = $grader->grade($vector['record'], $part);
+
+        expect([$part, $inPart->grade->value, $inPart->reasonCodes()])->toBe([$part, $expected['grade'], $expected['reasons']]);
+    }
 })->with(vectors());
 
 it('states the digest of every vector\'s record', function (string $path) {
