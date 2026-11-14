@@ -3,8 +3,8 @@
 use Steddle\Vcrs\Vcrs;
 
 /**
- * Path repositories for both packages at the validator's version and for opis as the app's vendor holds it, so Composer
- * installs offline what the split publishes.
+ * Path repositories for both packages at the validator's version and for opis and Seal as the app's vendor holds them,
+ * so Composer installs offline what the split publishes.
  *
  * @return list<array<string, mixed>>
  */
@@ -14,7 +14,7 @@ function packageRepositories(): array
     $folders = ['steddle/vcrs' => [standardFile(''), Vcrs::VERSION], 'steddle/vcrs-php' => [dirname(__DIR__), Vcrs::VERSION]];
 
     foreach (json_decode(file_get_contents("{$vendor}/composer/installed.json"), true)['packages'] as $package) {
-        if (str_starts_with($package['name'], 'opis/')) {
+        if (str_starts_with($package['name'], 'opis/') || $package['name'] === 'steddle/seal') {
             $folders[$package['name']] = ["{$vendor}/composer/{$package['install-path']}", $package['version']];
         }
     }

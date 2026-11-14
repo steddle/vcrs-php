@@ -4,6 +4,9 @@ namespace Steddle\Vcrs;
 
 use InvalidArgumentException;
 use stdClass;
+use Steddle\Seal\Canonical as Seal;
+use Steddle\Seal\Fingerprint;
+use Steddle\Seal\Refused;
 
 /**
  * The canonical form of section 11.3, RFC 8785, and the snapshot of section 5.4: the Merkle Tree of RFC 9162,
@@ -11,17 +14,12 @@ use stdClass;
  */
 final class Canonical
 {
+    /**
+     * @throws Refused
+     */
     public static function json(mixed $value): string
     {
-        return match (true) {
-            $value === null => 'null',
-            is_bool($value) => $value ? 'true' : 'false',
-            is_int($value), is_float($value) => self::number($value),
-            is_string($value) => json_encode($value, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_LINE_TERMINATORS | JSON_THROW_ON_ERROR),
-            is_array($value) && array_is_list($value) => '['.implode(',', array_map(self::json(...), $value)).']',
-            is_array($value), $value instanceof stdClass => self::object((array) $value),
-            default => throw new InvalidArgumentException('Only JSON values have a canonical form.'),
-        };
+        return Seal::json($value);
     }
 
     /**
@@ -32,7 +30,7 @@ final class Canonical
         $record = clone $record;
         unset($record->fingerprint);
 
-        return 'sha256:'.hash('sha256', self::json($record));
+        return (string) Fingerprint::of(self::json($record));
     }
 
     /**
@@ -50,7 +48,7 @@ final class Canonical
 
     public static function manifestFingerprint(stdClass $manifest): string
     {
-        return 'sha256:'.hash('sha256', self::json($manifest));
+        return (string) Fingerprint::of(self::json($manifest));
     }
 
     /**
@@ -215,69 +213,5 @@ final class Canonical
     private static function written(string $hash): string
     {
         return 'sha256:'.bin2hex($hash);
-    }
-
-    /**
-     * @param  array<array-key, mixed>  $members
-     */
-    private static function object(array $members): string
-    {
-        uksort($members, fn (int|string $a, int|string $b) => strcmp(self::utf16((string) $a), self::utf16((string) $b)));
-
-        $written = [];
-
-        foreach ($members as $name => $value) {
-            $written[] = self::json((string) $name).':'.self::json($value);
-        }
-
-        return '{'.implode(',', $written).'}';
-    }
-
-    /**
-     * A number as RFC 8785, section 3.2.2.3, writes it: the shortest digits that read back as the same double, laid out
-     * as ECMAScript's Number.prototype.toString does.
-     */
-    private static function number(int|float $number): string
-    {
-        if (is_int($number) && abs($number) <= 2 ** 53) {
-            return (string) $number;
-        }
-
-        $number = (float) $number;
-
-        if (! is_finite($number)) {
-            throw new InvalidArgumentException('RFC 8785 has no form for NaN or an infinity.');
-        }
-
-        if ($number === 0.0) {
-            return '0';
-        }
-
-        $precision = ini_set('serialize_precision', '-1');
-        $shortest = var_export(abs($number), true);
-        ini_set('serialize_precision', (string) $precision);
-
-        preg_match('/^(\d+)\.(\d+)(?:E([+-]\d+))?$/', $shortest, $parts);
-        $digits = ltrim($parts[1].$parts[2], '0');
-        $point = strlen($parts[1]) + (int) ($parts[3] ?? 0) - (strlen($parts[1].$parts[2]) - strlen($digits));
-        $digits = rtrim($digits, '0');
-        $length = strlen($digits);
-
-        $written = match (true) {
-            $length <= $point && $point <= 21 => $digits.str_repeat('0', $point - $length),
-            $point > 0 && $point <= 21 => substr($digits, 0, $point).'.'.substr($digits, $point),
-            $point > -6 && $point <= 0 => '0.'.str_repeat('0', -$point).$digits,
-            default => ($length === 1 ? $digits : $digits[0].'.'.substr($digits, 1)).'e'.($point - 1 >= 0 ? '+' : '-').abs($point - 1),
-        };
-
-        return ($number < 0 ? '-' : '').$written;
-    }
-
-    /**
-     * RFC 8785 sorts member names by their UTF-16 code units.
-     */
-    private static function utf16(string $name): string
-    {
-        return mb_convert_encoding($name, 'UTF-16BE', 'UTF-8');
     }
 }
