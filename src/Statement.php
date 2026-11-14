@@ -66,7 +66,7 @@ final class Statement
             ...self::groups($report, 'parts'),
             'snapshot' => [
                 'root' => $report->root,
-                'manifest' => $report->manifestDigest,
+                'manifest' => $report->manifestFingerprint,
                 'records' => count($report->gradings),
                 'anchor' => $anchor === null ? null : array_intersect_key($anchor, array_flip(['method', 'reference', 'on'])),
             ],

@@ -7,7 +7,7 @@ use stdClass;
 
 /**
  * Records from a spreadsheet, one row each, in the columns of templates/records.csv. A column named facet.<name> holds
- * that facet's value; evidence is type:digest pairs separated by |, and parts are separated by | too. An optional
+ * that facet's value; evidence is type:fingerprint pairs separated by |, and parts are separated by | too. An optional
  * column left empty leaves its member out of the record.
  */
 final class Csv
@@ -151,7 +151,7 @@ final class Csv
             'facets' => $facets,
             'subgroup' => $row['subgroup'] ?? '',
             'grade' => $row['grade'] ?? '',
-            'digest' => $row['digest'] ?? '',
+            'fingerprint' => $row['fingerprint'] ?? '',
         ];
 
         foreach ($optional as $key => $value) {
@@ -178,7 +178,7 @@ final class Csv
     }
 
     /**
-     * @return list<array{type: string, digest: string}>
+     * @return list<array{type: string, fingerprint: string}>
      */
     private static function evidence(string $value): array
     {
@@ -187,9 +187,9 @@ final class Csv
         }
 
         return array_map(function (string $pair) {
-            [$type, $digest] = explode(':', $pair, 2) + [1 => ''];
+            [$type, $fingerprint] = explode(':', $pair, 2) + [1 => ''];
 
-            return ['type' => $type, 'digest' => $digest];
+            return ['type' => $type, 'fingerprint' => $fingerprint];
         }, explode('|', $value));
     }
 }

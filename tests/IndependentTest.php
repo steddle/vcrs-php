@@ -1,6 +1,6 @@
 <?php
 
-it('agrees with a second implementation, written from the RFCs alone, on every digest, root, manifest and proof the standard publishes', function () {
+it('agrees with a second implementation, written from the RFCs alone, on every fingerprint, root, manifest and proof the standard publishes', function () {
     exec('python3 -I -B '.escapeshellarg(__DIR__.'/independent/check.py').' '.escapeshellarg(standardFile('')).' 2>&1', $output, $status);
 
     expect($status)->toBe(0, implode("\n", $output))

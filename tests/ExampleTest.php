@@ -52,7 +52,7 @@ it('publishes the manifest the example register anchors, and a proof that holds 
     [, $held] = vcrs('verify '.escapeshellarg(template('proof.json')).' --manifest='.escapeshellarg(template('manifest.json')));
     [, $refused] = vcrs('verify '.escapeshellarg(template('proof-altered.json')).' --manifest='.escapeshellarg(template('manifest.json')));
 
-    expect(Canonical::manifestDigest($manifest))->toBe($anchor['manifest'])
+    expect(Canonical::manifestFingerprint($manifest))->toBe($anchor['manifest'])
         ->and($manifest->records->root)->toBe($anchor['root'])
         ->and($held)->toBe(0)
         ->and($refused)->toBe(5);

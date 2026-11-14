@@ -36,12 +36,12 @@ const USAGE = 'VCRS '.Vcrs::VERSION.": check a claimant register against the Ver
       Draft the conformance statement as JSON. Without the auditor it is a draft.
 
   vcrs manifest <register.json> [--records=<records.csv>] [--json]
-      Print the snapshot (one line per record: id and digest), its root and the manifest's digest, which is what is
-      anchored in time. With --json, print the manifest itself.
+      Print the snapshot (one line per record: id and fingerprint), its root and the manifest's fingerprint, which is
+      what is anchored in time. With --json, print the manifest itself.
 
   vcrs proof <register.json> --record=<id> [--records=<records.csv>]
-      Print one record's line, its inclusion proof, the snapshot root and the manifest's digest as JSON, for the person
-      the record is of.
+      Print one record's line, its inclusion proof, the snapshot root and the manifest's fingerprint as JSON, for the
+      person the record is of.
 
   vcrs verify <proof.json> --root=<sha256:...>
   vcrs verify <proof.json> --manifest=<manifest.json>
@@ -155,7 +155,7 @@ function check(Report $report, bool $json, string|true|null $expect): int
     }
 
     echo "Snapshot root: {$report->root}\n";
-    echo "Manifest: {$report->manifestDigest}\n\n";
+    echo "Manifest: {$report->manifestFingerprint}\n\n";
 
     $level = $report->level();
 
@@ -184,7 +184,7 @@ function check(Report $report, bool $json, string|true|null $expect): int
 }
 
 /**
- * Every outcome the file states, against the check's: each record's grade, reasons and digest, the counts, the
+ * Every outcome the file states, against the check's: each record's grade, reasons and fingerprint, the counts, the
  * coverage, the root, the manifest, the level, and the finding codes.
  */
 function against(Report $report, string $path): int
@@ -192,11 +192,11 @@ function against(Report $report, string $path): int
     $expected = Json::decode((string) file_get_contents($path));
     $expected = json_decode(json_encode($expected, JSON_THROW_ON_ERROR), true, flags: JSON_THROW_ON_ERROR);
     $actual = [
-        'records' => array_map(fn ($grading, $digest) => ['grade' => $grading->grade->value, 'reasons' => $grading->reasonCodes(), 'digest' => $digest], $report->gradings, $report->digests),
+        'records' => array_map(fn ($grading, $fingerprint) => ['grade' => $grading->grade->value, 'reasons' => $grading->reasonCodes(), 'fingerprint' => $fingerprint], $report->gradings, $report->fingerprints),
         'counts' => $report->counts(),
         'coverage' => $report->coverage(),
         'root' => $report->root,
-        'manifest' => $report->manifestDigest,
+        'manifest' => $report->manifestFingerprint,
         'consistent' => $report->consistent(),
         'verified' => $report->verified(),
         'level' => $report->level()?->value,
@@ -279,12 +279,12 @@ function manifest(Report $report, bool $json): int
         return 0;
     }
 
-    foreach (Canonical::lines($report->digests) as $line) {
+    foreach (Canonical::lines($report->fingerprints) as $line) {
         echo "{$line}\n";
     }
 
     echo "root {$report->root}\n";
-    echo "manifest {$report->manifestDigest}\n";
+    echo "manifest {$report->manifestFingerprint}\n";
 
     return 0;
 }
@@ -300,7 +300,7 @@ function proof(Report $report, array $options): int
         return 2;
     }
 
-    echo json_encode([...Canonical::proof($report->digests, $options['record']), 'manifest' => $report->manifestDigest], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)."\n";
+    echo json_encode([...Canonical::proof($report->fingerprints, $options['record']), 'manifest' => $report->manifestFingerprint], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)."\n";
 
     return 0;
 }
@@ -323,7 +323,7 @@ function verify(string $path, array $options): int
             return 3;
         }
 
-        $under = Canonical::manifestDigest($manifest);
+        $under = Canonical::manifestFingerprint($manifest);
     }
 
     if (! is_string($root)) {
@@ -349,7 +349,7 @@ function verify(string $path, array $options): int
     echo "✓ '{$proof['line']}' is in the snapshot under {$root}.\n";
 
     if ($under !== null) {
-        echo "  The manifest {$under} commits to that root: check its anchor's timestamp against this digest.\n";
+        echo "  The manifest {$under} commits to that root: check its anchor's timestamp against this fingerprint.\n";
     }
 
     return 0;

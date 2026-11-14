@@ -12,7 +12,7 @@ final readonly class Report
      * @param  array<string, mixed>  $data
      * @param  array<string, Grading>  $gradings  per record id
      * @param  array<string, array<string, Grading>>  $partGradings  per record id, per part of a split claim it belongs to
-     * @param  array<string, string>  $digests  per record id
+     * @param  array<string, string>  $fingerprints  per record id
      * @param  list<array{code: Finding, pointer: string, message: string}>  $findings
      */
     public function __construct(
@@ -20,10 +20,10 @@ final readonly class Report
         public Context $context,
         public array $gradings,
         public array $partGradings,
-        public array $digests,
+        public array $fingerprints,
         public string $root,
         public stdClass $manifest,
-        public string $manifestDigest,
+        public string $manifestFingerprint,
         public array $findings,
     ) {
         $this->annex = $context->annex;
@@ -38,7 +38,7 @@ final readonly class Report
     }
 
     /**
-     * Whether what the export states, its grades, digests, root and manifest, is what its facts give (section 11.6).
+     * Whether what the export states, its grades, fingerprints, root and manifest, is what its facts give (section 11.6).
      */
     public function verified(): bool
     {
@@ -267,7 +267,7 @@ final readonly class Report
             'parts' => (object) $this->parts(),
             'group_coverage' => array_map(fn (array $groups): object => (object) $groups, $this->groupCoverage()),
             'snapshot_root' => $this->root,
-            'manifest' => $this->manifestDigest,
+            'manifest' => $this->manifestFingerprint,
             'consistent' => $this->consistent(),
             'verified' => $this->verified(),
             'export_conditions_met' => $this->level()?->value,

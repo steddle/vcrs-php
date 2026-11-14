@@ -34,7 +34,7 @@ enum Finding: string
     case AnchoredBeforeReferenceDate = 'anchored_before_reference_date';
 
     case GradeDiffers = 'grade_differs';
-    case DigestDiffers = 'digest_differs';
+    case FingerprintDiffers = 'fingerprint_differs';
     case RootDiffers = 'root_differs';
     case ManifestDiffers = 'manifest_differs';
 
@@ -43,9 +43,9 @@ enum Finding: string
     case ResidenceUnsourced = 'residence_unsourced';
     case OptInNamesOtherAction = 'opt_in_names_other_action';
     case PartWithoutDenominator = 'part_without_denominator';
-    case FlowWithoutDigest = 'flow_without_digest';
-    case TermsWithoutDigest = 'terms_without_digest';
-    case RecordWithoutDigest = 'record_without_digest';
+    case FlowWithoutFingerprint = 'flow_without_fingerprint';
+    case TermsWithoutFingerprint = 'terms_without_fingerprint';
+    case RecordWithoutFingerprint = 'record_without_fingerprint';
     case NoFacets = 'no_facets';
     case FacetValueUndeclared = 'facet_value_undeclared';
     case FlowNotWitnessed = 'flow_not_witnessed';
@@ -60,7 +60,7 @@ enum Finding: string
     public function outcome(): string
     {
         return match (true) {
-            in_array($this, [self::GradeDiffers, self::DigestDiffers, self::RootDiffers, self::ManifestDiffers], true) => 'verified',
+            in_array($this, [self::GradeDiffers, self::FingerprintDiffers, self::RootDiffers, self::ManifestDiffers], true) => 'verified',
             $this->condition() !== null => 'condition',
             default => 'consistent',
         };
@@ -74,9 +74,9 @@ enum Finding: string
             self::ResidenceUnsourced => 'residence_sourced',
             self::OptInNamesOtherAction => 'opt_ins_named',
             self::PartWithoutDenominator => 'parts_sized',
-            self::FlowWithoutDigest => 'flow_digests',
-            self::TermsWithoutDigest => 'terms_digests',
-            self::RecordWithoutDigest => 'record_digests',
+            self::FlowWithoutFingerprint => 'flow_fingerprints',
+            self::TermsWithoutFingerprint => 'terms_fingerprints',
+            self::RecordWithoutFingerprint => 'record_fingerprints',
             self::NoFacets, self::FacetValueUndeclared => 'cross_section',
             self::FlowNotWitnessed => 'flows_witnessed',
             self::SubgroupsUndeclared, self::SubgroupUndeclared, self::SubgroupWithoutDenominator => 'subgroups',

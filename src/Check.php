@@ -24,7 +24,7 @@ final class Check
         $grader = new Grader($check->context);
         $gradings = [];
         $partGradings = [];
-        $digests = [];
+        $fingerprints = [];
 
         foreach ($register->records as $index => $raw) {
             $record = $register->data['records'][$index];
@@ -41,30 +41,30 @@ final class Check
             foreach ($check->context->parts === null ? [] : ($record['parts'] ?? []) as $part) {
                 $partGradings[$id][$part] = $grader->grade($record, $part);
             }
-            $digests[$id] = Canonical::digest($raw);
+            $fingerprints[$id] = Canonical::fingerprint($raw);
 
             if (isset($record['grade']) && $record['grade'] !== $gradings[$id]->grade->value) {
                 $check->find(Finding::GradeDiffers, "/records/{$index}/grade", "Record {$id} states grade {$record['grade']}; its facts give {$gradings[$id]->grade->value}.");
             }
 
-            if (! isset($record['digest'])) {
-                $check->find(Finding::RecordWithoutDigest, "/records/{$index}", "Record {$id} has no digest.");
-            } elseif ($record['digest'] !== $digests[$id]) {
-                $check->find(Finding::DigestDiffers, "/records/{$index}/digest", "Record {$id} states digest {$record['digest']}; its canonical form gives {$digests[$id]}.");
+            if (! isset($record['fingerprint'])) {
+                $check->find(Finding::RecordWithoutFingerprint, "/records/{$index}", "Record {$id} has no fingerprint.");
+            } elseif ($record['fingerprint'] !== $fingerprints[$id]) {
+                $check->find(Finding::FingerprintDiffers, "/records/{$index}/fingerprint", "Record {$id} states fingerprint {$record['fingerprint']}; its canonical form gives {$fingerprints[$id]}.");
             }
         }
 
-        $root = Canonical::root($digests);
+        $root = Canonical::root($fingerprints);
         $manifest = Canonical::manifest($register->document, $root);
-        $manifestDigest = Canonical::manifestDigest($manifest);
+        $manifestFingerprint = Canonical::manifestFingerprint($manifest);
 
         $check->settings();
         $check->records();
         $check->provenance();
-        $check->anchor($root, $manifestDigest);
+        $check->anchor($root, $manifestFingerprint);
         $check->spread($gradings);
 
-        return new Report($register->data, $check->context, $gradings, $partGradings, $digests, $root, $manifest, $manifestDigest, $check->findings);
+        return new Report($register->data, $check->context, $gradings, $partGradings, $fingerprints, $root, $manifest, $manifestFingerprint, $check->findings);
     }
 
     private function find(Finding $code, string $pointer, string $message): void
@@ -294,8 +294,8 @@ final class Check
 
             if ($capture === null) {
                 $this->find(Finding::FlowNotCaptured, "/flows/{$index}/capture", "Flow version {$flow['id']} was not captured.");
-            } elseif ($capture['digest'] === null) {
-                $this->find(Finding::FlowWithoutDigest, "/flows/{$index}/capture/digest", "Flow version {$flow['id']} has no capture digest.");
+            } elseif ($capture['fingerprint'] === null) {
+                $this->find(Finding::FlowWithoutFingerprint, "/flows/{$index}/capture/fingerprint", "Flow version {$flow['id']} has no capture fingerprint.");
             }
 
             if (($capture['witnessed'] ?? null) === null) {
@@ -304,8 +304,8 @@ final class Check
         }
 
         foreach ($this->register->data['terms'] as $index => $version) {
-            if (isset($used['terms'][$version['id']]) && ($version['digest'] ?? null) === null) {
-                $this->find(Finding::TermsWithoutDigest, "/terms/{$index}", "Terms version {$version['id']} has no digest.");
+            if (isset($used['terms'][$version['id']]) && ($version['fingerprint'] ?? null) === null) {
+                $this->find(Finding::TermsWithoutFingerprint, "/terms/{$index}", "Terms version {$version['id']} has no fingerprint.");
             }
         }
     }

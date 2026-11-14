@@ -40,7 +40,7 @@ function templateReport(?callable $change = null, string|Annex $annex = 'nl'): R
 }
 
 /**
- * The example register changed, with every record's digest, the root and the manifest recomputed and anchored again,
+ * The example register changed, with every record's fingerprint, the root and the manifest recomputed and anchored again,
  * so the check finds only what the change itself causes.
  */
 function sealed(callable $change, string|Annex $annex = 'nl'): Report
@@ -56,12 +56,12 @@ function sealedDocument(callable $change, string|Annex $annex = 'nl'): array
     $document = $change(templateDocument());
 
     foreach ($document['records'] as $index => $record) {
-        unset($record['digest']);
-        $document['records'][$index]['digest'] = Canonical::digest(json_decode(json_encode($record)));
+        unset($record['fingerprint']);
+        $document['records'][$index]['fingerprint'] = Canonical::fingerprint(json_decode(json_encode($record)));
     }
 
     $report = reportOf($document, $annex);
-    $document['anchor'] = [...$document['anchor'], 'root' => $report->root, 'manifest' => $report->manifestDigest];
+    $document['anchor'] = [...$document['anchor'], 'root' => $report->root, 'manifest' => $report->manifestFingerprint];
 
     return $document;
 }
@@ -88,7 +88,7 @@ it('checks the template register at level verified', function () {
     expect($report->counts())->toBe(['A' => 1, 'B' => 2, 'C' => 2, 'D' => 2, 'inactive' => 1])
         ->and($report->coverage()['C'])->toBe(['records' => 5, 'low' => round(5 / 26000 * 100, 4), 'high' => round(5 / 21000 * 100, 4)])
         ->and($report->root)->toBe(json_decode(file_get_contents(template('register.json')), true)['anchor']['root'])
-        ->and($report->manifestDigest)->toBe(json_decode(file_get_contents(template('register.json')), true)['anchor']['manifest'])
+        ->and($report->manifestFingerprint)->toBe(json_decode(file_get_contents(template('register.json')), true)['anchor']['manifest'])
         ->and($report->findings)->toBe([])
         ->and($report->consistent())->toBeTrue()
         ->and($report->verified())->toBeTrue()
@@ -99,7 +99,7 @@ it('gives a csv register the same root and manifest as the same records in json'
     $json = templateReport(fn ($document) => $document);
 
     expect($json->root)->toBe(templateReport()->root)
-        ->and($json->manifestDigest)->toBe(templateReport()->manifestDigest);
+        ->and($json->manifestFingerprint)->toBe(templateReport()->manifestFingerprint);
 });
 
 it('reports the spread of counted records over the class facets', function () {
@@ -130,7 +130,7 @@ it('finds an export that cannot be read one way, and meets no level', function (
         return $document;
     }, 'duplicate_flow_id'],
     'a terms id twice' => [function ($document) {
-        $document['terms'][] = ['id' => 't1', 'digest' => 'sha256:'.str_repeat('a', 64)];
+        $document['terms'][] = ['id' => 't1', 'fingerprint' => 'sha256:'.str_repeat('a', 64)];
 
         return $document;
     }, 'duplicate_terms_id'],
@@ -290,12 +290,12 @@ it('finds an export that does not compute what it states, and meets no level', f
         $document['records'][3]['grade'] = 'B';
 
         return $document;
-    }, ['grade_differs', 'digest_differs', 'root_differs', 'manifest_differs']],
+    }, ['grade_differs', 'fingerprint_differs', 'root_differs', 'manifest_differs']],
     'a record changed after its snapshot' => [function ($document) {
         $document['records'][2]['joined_on'] = '2026-09-03';
 
         return $document;
-    }, ['digest_differs', 'root_differs', 'manifest_differs']],
+    }, ['fingerprint_differs', 'root_differs', 'manifest_differs']],
 ]);
 
 it('catches a flow version that stops informing under the same root, through the manifest', function () {
@@ -320,7 +320,7 @@ it('changes the manifest, never the root, when the context that grades the recor
     $after = templateReport($change);
 
     expect($after->root)->toBe($before->root)
-        ->and($after->manifestDigest)->not->toBe($before->manifestDigest)
+        ->and($after->manifestFingerprint)->not->toBe($before->manifestFingerprint)
         ->and(codes($after))->toContain('manifest_differs')
         ->and(codes($after))->not->toContain('root_differs');
 })->with([
@@ -423,7 +423,7 @@ it('drafts a conformance statement its schema accepts, a draft until the auditor
         ->and($statement['auditor']['check'])->toBe('reproduction_test')
         ->and($statement['auditor']['engagement'])->toBe('agreed_upon_procedures')
         ->and($statement['snapshot']['records'])->toBe(8)
-        ->and($statement['snapshot']['manifest'])->toBe(templateReport()->manifestDigest);
+        ->and($statement['snapshot']['manifest'])->toBe(templateReport()->manifestFingerprint);
 });
 
 it('counts in the statement the records at grade C whose evidence does not establish membership', function () {
@@ -770,7 +770,7 @@ it('proves a record against the anchored root, and against the manifest that com
         ->and($heldStatus)->toBe(0)
         ->and($held[0])->toBe("✓ '{$line}' is in the snapshot under {$anchor['root']}.")
         ->and($committedStatus)->toBe(0)
-        ->and($committed[1])->toBe("  The manifest {$anchor['manifest']} commits to that root: check its anchor's timestamp against this digest.")
+        ->and($committed[1])->toBe("  The manifest {$anchor['manifest']} commits to that root: check its anchor's timestamp against this fingerprint.")
         ->and($refusedStatus)->toBe(5)
         ->and($refused[0])->toStartWith('✗');
 });

@@ -27,8 +27,8 @@ def digest(value):
 
 
 def record_digest(record):
-    """Core 11.3: RFC 8785 of the record without its digest member."""
-    return digest({k: v for k, v in record.items() if k != 'digest'})
+    """Core 11.3: RFC 8785 of the record without its fingerprint member."""
+    return digest({k: v for k, v in record.items() if k != 'fingerprint'})
 
 
 def lines(records):
@@ -55,15 +55,15 @@ def main(standard):
 
     for path in sorted(glob.glob(os.path.join(standard, 'vectors', '*', '*.json'))):
         vector = read(path)
-        check(os.path.relpath(path, standard), record_digest(vector['record']), vector['expected']['digest'])
+        check(os.path.relpath(path, standard), record_digest(vector['record']), vector['expected']['fingerprint'])
 
     templates = os.path.join(standard, 'templates')
     export = read(os.path.join(templates, 'export.json'))
     expected = read(os.path.join(templates, 'expected.json'))
 
     for record in export['records']:
-        check(f"record {record['id']}", record_digest(record), record['digest'])
-        check(f"expected {record['id']}", record_digest(record), expected['records'][record['id']]['digest'])
+        check(f"record {record['id']}", record_digest(record), record['fingerprint'])
+        check(f"expected {record['id']}", record_digest(record), expected['records'][record['id']]['fingerprint'])
 
     root = merkle.to_text(merkle.mth(lines(export['records'])))
     check('root', root, export['anchor']['root'])

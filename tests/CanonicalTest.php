@@ -3,17 +3,17 @@
 use Steddle\Vcrs\Canonical;
 
 /**
- * @return array<string, string> `$size` records, r-1 onwards, each with a digest of its own
+ * @return array<string, string> `$size` records, r-1 onwards, each with a fingerprint of its own
  */
 function snapshot(int $size): array
 {
-    $digests = [];
+    $fingerprints = [];
 
     for ($n = 1; $n <= $size; $n++) {
-        $digests["r-{$n}"] = 'sha256:'.hash('sha256', "record {$n}");
+        $fingerprints["r-{$n}"] = 'sha256:'.hash('sha256', "record {$n}");
     }
 
-    return $digests;
+    return $fingerprints;
 }
 
 /**
@@ -57,13 +57,13 @@ it('gives the inclusion proofs of the seven-leaf example in RFC 9162, section 2.
 ]);
 
 it('proves every record of a snapshot from its line and proof alone', function (int $size) {
-    $digests = snapshot($size);
-    $root = Canonical::root($digests);
+    $fingerprints = snapshot($size);
+    $root = Canonical::root($fingerprints);
 
-    foreach (array_keys($digests) as $id) {
-        $proof = Canonical::proof($digests, $id);
+    foreach (array_keys($fingerprints) as $id) {
+        $proof = Canonical::proof($fingerprints, $id);
 
-        expect($proof['line'])->toBe("{$id} {$digests[$id]}")
+        expect($proof['line'])->toBe("{$id} {$fingerprints[$id]}")
             ->and($proof['size'])->toBe($size)
             ->and($proof['root'])->toBe($root)
             ->and(Canonical::includes($root, $proof['line'], $proof['index'], $proof['size'], $proof['proof']))->toBeTrue();
@@ -83,7 +83,7 @@ it('rejects a proof that does not place the line under the root', function (Clos
     'another root' => [fn (array $proof) => [...$proof, 'root' => Canonical::root(snapshot(6))]],
     'a node short' => [fn (array $proof) => [...$proof, 'proof' => array_slice($proof['proof'], 0, -1)]],
     'a node too many' => [fn (array $proof) => [...$proof, 'proof' => [...$proof['proof'], $proof['proof'][0]]]],
-    'a node not written as a digest' => [fn (array $proof) => [...$proof, 'proof' => ['sha256:xyz', ...array_slice($proof['proof'], 1)]]],
+    'a node not written as a fingerprint' => [fn (array $proof) => [...$proof, 'proof' => ['sha256:xyz', ...array_slice($proof['proof'], 1)]]],
 ]);
 
 it('refuses a proof for a record the register does not hold', function () {
@@ -152,7 +152,7 @@ it('builds the manifest from the export without its anchor, its records as their
     $manifest = Canonical::manifest($export, 'sha256:root');
 
     expect(Canonical::json($manifest))->toBe('{"denominator":{"high":2,"low":1},"records":{"count":2,"root":"sha256:root"},"vcrs":"x"}')
-        ->and(Canonical::manifestDigest($manifest))->toBe('sha256:'.hash('sha256', Canonical::json($manifest)))
+        ->and(Canonical::manifestFingerprint($manifest))->toBe('sha256:'.hash('sha256', Canonical::json($manifest)))
         ->and(count($export->records))->toBe(2)
         ->and(isset($export->anchor))->toBeTrue();
 });

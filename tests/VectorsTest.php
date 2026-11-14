@@ -33,10 +33,10 @@ it('grades every vector as it states', function (string $path) {
     }
 })->with(vectors());
 
-it('states the digest of every vector\'s record', function (string $path) {
+it('states the fingerprint of every vector\'s record', function (string $path) {
     $vector = json_decode(file_get_contents($path), flags: JSON_THROW_ON_ERROR);
 
-    expect($vector->expected->digest)->toBe(Canonical::digest($vector->record));
+    expect($vector->expected->fingerprint)->toBe(Canonical::fingerprint($vector->record));
 })->with(vectors());
 
 it('holds only records the record schema accepts', function (string $path) {

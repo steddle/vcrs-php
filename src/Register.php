@@ -14,7 +14,7 @@ final readonly class Register
     /**
      * @param  array<string, mixed>  $data  the export as arrays, for the rules
      * @param  stdClass  $document  the export as decoded, for its manifest
-     * @param  list<stdClass>  $records  each record as decoded, for its digest
+     * @param  list<stdClass>  $records  each record as decoded, for its fingerprint
      */
     private function __construct(
         public array $data,

@@ -25,19 +25,19 @@ final class Canonical
     }
 
     /**
-     * The record's digest: its canonical form without its own digest member.
+     * The record's fingerprint: its canonical form without its own fingerprint member.
      */
-    public static function digest(stdClass $record): string
+    public static function fingerprint(stdClass $record): string
     {
         $record = clone $record;
-        unset($record->digest);
+        unset($record->fingerprint);
 
         return 'sha256:'.hash('sha256', self::json($record));
     }
 
     /**
      * The manifest of section 5.4: the export without its anchor, its records replaced by their number and the
-     * snapshot root, so one digest commits to the records and to the context that grades them.
+     * snapshot root, so one fingerprint commits to the records and to the context that grades them.
      */
     public static function manifest(stdClass $export, string $root): stdClass
     {
@@ -48,23 +48,23 @@ final class Canonical
         return $manifest;
     }
 
-    public static function manifestDigest(stdClass $manifest): string
+    public static function manifestFingerprint(stdClass $manifest): string
     {
         return 'sha256:'.hash('sha256', self::json($manifest));
     }
 
     /**
-     * @param  array<string, string>  $digests  per record id
-     * @return list<string> `{id} {digest}`, ordered by identifier in byte order
+     * @param  array<string, string>  $fingerprints  per record id
+     * @return list<string> `{id} {fingerprint}`, ordered by identifier in byte order
      */
-    public static function lines(array $digests): array
+    public static function lines(array $fingerprints): array
     {
-        ksort($digests, SORT_STRING);
+        ksort($fingerprints, SORT_STRING);
 
         $lines = [];
 
-        foreach ($digests as $id => $digest) {
-            $lines[] = "{$id} {$digest}";
+        foreach ($fingerprints as $id => $fingerprint) {
+            $lines[] = "{$id} {$fingerprint}";
         }
 
         return $lines;
@@ -73,11 +73,11 @@ final class Canonical
     /**
      * The Merkle Tree Hash of RFC 9162, section 2.1.1, over the lines.
      *
-     * @param  array<string, string>  $digests  per record id
+     * @param  array<string, string>  $fingerprints  per record id
      */
-    public static function root(array $digests): string
+    public static function root(array $fingerprints): string
     {
-        $leaves = array_map(self::leaf(...), self::lines($digests));
+        $leaves = array_map(self::leaf(...), self::lines($fingerprints));
 
         return self::written(self::tree($leaves, 0, count($leaves)));
     }
@@ -86,18 +86,18 @@ final class Canonical
      * A record's line with its inclusion proof of RFC 9162, section 2.1.3.1: its index among the lines, their number,
      * and the nodes from its leaf up.
      *
-     * @param  array<string, string>  $digests  per record id
+     * @param  array<string, string>  $fingerprints  per record id
      * @return array{line: string, index: int, size: int, proof: list<string>, root: string}
      */
-    public static function proof(array $digests, string $id): array
+    public static function proof(array $fingerprints, string $id): array
     {
-        if (! isset($digests[$id])) {
+        if (! isset($fingerprints[$id])) {
             throw new InvalidArgumentException("The register holds no record {$id}.");
         }
 
-        $lines = self::lines($digests);
+        $lines = self::lines($fingerprints);
         $leaves = array_map(self::leaf(...), $lines);
-        $index = array_search("{$id} {$digests[$id]}", $lines, true);
+        $index = array_search("{$id} {$fingerprints[$id]}", $lines, true);
 
         return [
             'line' => $lines[$index],
